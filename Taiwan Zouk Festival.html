@@ -66,6 +66,7 @@ function gdEmbed(fileId) {
 // ─── Categories & Days ───────────────────────────────────────────────────────
 const CATEGORIES = ["All / 全部"];
 const DAYS       = ["All Days / 全部"];
+const VIDEO_PRICE = 15;
 
 // ─── Parse filename into metadata ────────────────────────────────────────────
 // Expected filename pattern: TZF 2026 - DAY 2 - C5436
@@ -145,8 +146,7 @@ const CLOUD_VIDEOS = DRIVE_FILES.map((file, i) => {
     title: meta.title,
     day: meta.day,
     category: meta.category,
-    price: 10,
-    unlocked: false,
+    price: VIDEO_PRICE,
     fileName: file.name,
   };
 });
@@ -171,8 +171,7 @@ function UploadZone({ onFilesAdded }) {
         title: meta.title,
         day: meta.day,
         category: meta.category,
-        price: 10,
-        unlocked: false,
+        price: VIDEO_PRICE,
         fileName: file.name,
       });
     });
@@ -320,7 +319,7 @@ function VideoCard({ video, inCart, onAddCart, onRemoveCart, onOpen, compact }) 
         )}
 
         {/* Watermark overlay */}
-        {!video.unlocked && <Watermark />}
+        <Watermark />
 
         {/* Hover tint + play button */}
         <div style={{
@@ -346,19 +345,12 @@ function VideoCard({ video, inCart, onAddCart, onRemoveCart, onOpen, compact }) 
 
         {/* Badges */}
         <div style={{position:"absolute",top:7,right:7,zIndex:10,display:"flex",gap:4}}>
-          {video.unlocked ? (
-            <span style={{
-              background:"oklch(72% 0.18 145 / 0.85)",borderRadius:4,
-              padding:"2px 7px",fontSize:9,fontWeight:700,letterSpacing:1,color:"white",
-            }}>UNLOCKED</span>
-          ) : (
-            <span style={{
-              background:"rgba(0,0,0,0.6)",backdropFilter:"blur(6px)",
-              borderRadius:4,padding:"2px 7px",fontSize:9,fontWeight:600,
-              letterSpacing:1,color:"rgba(255,255,255,0.65)",
-              border:"1px solid rgba(255,255,255,0.10)",
-            }}>PREVIEW</span>
-          )}
+          <span style={{
+            background:"rgba(0,0,0,0.6)",backdropFilter:"blur(6px)",
+            borderRadius:4,padding:"2px 7px",fontSize:9,fontWeight:600,
+            letterSpacing:1,color:"rgba(255,255,255,0.65)",
+            border:"1px solid rgba(255,255,255,0.10)",
+          }}>PREVIEW</span>
         </div>
 
         {/* Cart check */}
@@ -396,19 +388,17 @@ function VideoCard({ video, inCart, onAddCart, onRemoveCart, onOpen, compact }) 
           marginBottom:8,lineHeight:1.3,
         }}>{video.code}</div>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-          <span style={{fontSize:13,fontWeight:700,color:"var(--gold)"}}>US$10</span>
-          {!video.unlocked && (
-            <button
-              onClick={e => { e.stopPropagation(); inCart ? onRemoveCart(video.id) : onAddCart(video.id); }}
-              style={{
-                padding:"4px 11px",borderRadius:5,fontSize:11,fontWeight:600,
-                cursor:"pointer",transition:"all 0.15s",letterSpacing:0.3,
-                background: inCart ? "var(--gold-bg)" : "rgba(255,255,255,0.06)",
-                border: `1px solid ${inCart ? "rgba(200,160,60,0.4)" : "var(--border)"}`,
-                color: inCart ? "var(--gold)" : "var(--text-muted)",
-              }}
-            >{inCart ? "✓ Added" : "+ Select"}</button>
-          )}
+          <span style={{fontSize:14,fontWeight:800,color:"var(--gold)"}}>US${VIDEO_PRICE}</span>
+          <button
+            onClick={e => { e.stopPropagation(); inCart ? onRemoveCart(video.id) : onAddCart(video.id); }}
+            style={{
+              padding:"4px 11px",borderRadius:5,fontSize:11,fontWeight:600,
+              cursor:"pointer",transition:"all 0.15s",letterSpacing:0.3,
+              background: inCart ? "var(--gold-bg)" : "rgba(255,255,255,0.06)",
+              border: `1px solid ${inCart ? "rgba(200,160,60,0.4)" : "var(--border)"}`,
+              color: inCart ? "var(--gold)" : "var(--text-muted)",
+            }}
+          >{inCart ? "✓ Added" : "+ Select"}</button>
         </div>
       </div>
     </div>
@@ -467,25 +457,12 @@ function TenSecondPreviewVideo({ src }) {
 }
 
 // ─── Video Modal ──────────────────────────────────────────────────────────────
-function VideoModal({ video, inCart, onAddCart, onRemoveCart, onClose, onUnlock, onBuyNow }) {
-  const [tab, setTab] = useState("preview"); // "preview" | "unlock"
-  const [code, setCode] = useState("");
-  const [codeErr, setCodeErr] = useState("");
-
+function VideoModal({ video, inCart, onAddCart, onRemoveCart, onClose, onBuyNow }) {
   useEffect(() => {
     const fn = e => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", fn);
     return () => window.removeEventListener("keydown", fn);
   }, [onClose]);
-
-  const tryUnlock = () => {
-    if (code.trim().toUpperCase() === "TZF2026") {
-      onUnlock(video.id);
-      setTab("unlocked");
-    } else {
-      setCodeErr("Invalid code. Please check and try again. / 取片碼錯誤，請確認後再試。");
-    }
-  };
 
   const embedUrl  = video.gdFileId ? gdEmbed(video.gdFileId) : null;
   const thumbUrl  = video.gdFileId ? gdThumb(video.gdFileId) : null;
@@ -515,54 +492,33 @@ function VideoModal({ video, inCart, onAddCart, onRemoveCart, onClose, onUnlock,
           maxHeight:"72vh",
           background:"#050508",borderRadius:"14px 14px 0 0",overflow:"hidden",
         }}>
-          {video.unlocked ? (
-            /* Unlocked: local video or GDrive embed */
-            localUrl ? (
-              <video src={localUrl} controls autoPlay
-                style={{position:"absolute",inset:0,width:"100%",height:"100%",background:"#000"}}/>
-            ) : embedUrl ? (
-              <iframe src={embedUrl}
-                style={{position:"absolute",inset:0,width:"100%",height:"100%",border:"none"}}
-                allow="autoplay" allowFullScreen/>
-            ) : (
-              <div style={{position:"absolute",inset:0,display:"flex",
-                flexDirection:"column",alignItems:"center",justifyContent:"center",gap:10}}>
-                <div style={{fontSize:40}}>🔓</div>
-                <div style={{color:"white",fontWeight:600}}>High-res unlocked · 已解鎖高清版</div>
-              </div>
-            )
+          {localUrl ? (
+            <TenSecondPreviewVideo src={localUrl} />
+          ) : embedUrl ? (
+            <iframe src={embedUrl}
+              style={{position:"absolute",inset:0,width:"100%",height:"100%",border:"none",background:"#000"}}
+              allow="autoplay"/>
+          ) : thumbUrl ? (
+            <img src={thumbUrl} alt={video.title}
+              style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"contain",background:"#000"}}/>
           ) : (
-            /* Preview: local video (muted) or GDrive embed or placeholder — always with watermark */
-            <>
-              {localUrl ? (
-                <TenSecondPreviewVideo src={localUrl} />
-              ) : embedUrl ? (
-                <iframe src={embedUrl}
-                  style={{position:"absolute",inset:0,width:"100%",height:"100%",border:"none",background:"#000"}}
-                  allow="autoplay"/>
-              ) : thumbUrl ? (
-                <img src={thumbUrl} alt={video.title}
-                  style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"contain",background:"#000"}}/>
-              ) : (
-                <div style={{position:"absolute",inset:0,background:"#0d0d12",
-                  display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:8}}>
-                  <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
-                    <rect x="4" y="4" width="40" height="40" rx="8"
-                      stroke="rgba(255,255,255,0.12)" strokeWidth="2"/>
-                    <path d="M19 15l16 9-16 9V15z" fill="rgba(255,255,255,0.18)"/>
-                  </svg>
-                  <div style={{color:"rgba(255,255,255,0.3)",fontSize:13}}>Preview — {video.code}</div>
-                </div>
-              )}
-              <Watermark />
-              <div style={{
-                position:"absolute",bottom:14,left:14,zIndex:10,
-                background:"rgba(0,0,0,0.65)",backdropFilter:"blur(8px)",
-                borderRadius:6,padding:"4px 12px",
-                fontSize:11,color:"rgba(255,255,255,0.65)",fontWeight:600,letterSpacing:1,
-              }}>10 SEC WATERMARK PREVIEW · 10 秒浮水印預覽</div>
-            </>
+            <div style={{position:"absolute",inset:0,background:"#0d0d12",
+              display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:8}}>
+              <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+                <rect x="4" y="4" width="40" height="40" rx="8"
+                  stroke="rgba(255,255,255,0.12)" strokeWidth="2"/>
+                <path d="M19 15l16 9-16 9V15z" fill="rgba(255,255,255,0.18)"/>
+              </svg>
+              <div style={{color:"rgba(255,255,255,0.3)",fontSize:13}}>Preview — {video.code}</div>
+            </div>
           )}
+          <Watermark />
+          <div style={{
+            position:"absolute",bottom:14,left:14,zIndex:10,
+            background:"rgba(0,0,0,0.65)",backdropFilter:"blur(8px)",
+            borderRadius:6,padding:"4px 12px",
+            fontSize:11,color:"rgba(255,255,255,0.65)",fontWeight:600,letterSpacing:1,
+          }}>10 SEC WATERMARK PREVIEW · 10 秒浮水印預覽</div>
         </div>
 
         {/* ── Info & actions ── */}
@@ -586,30 +542,11 @@ function VideoModal({ video, inCart, onAddCart, onRemoveCart, onClose, onUnlock,
             Taiwan Zouk Festival 2026 · May 1–3, Taipei · Flow Theory Visuals
           </p>
 
-          {video.unlocked ? (
-            /* Unlocked state */
-            <div style={{
-              padding:"16px 18px",background:"oklch(72% 0.18 145 / 0.08)",
-              borderRadius:10,border:"1px solid oklch(72% 0.18 145 / 0.25)",
-              display:"flex",alignItems:"center",gap:14,
-            }}>
-              <span style={{fontSize:28}}>🎬</span>
-              <div>
-                <div style={{fontWeight:600,color:"var(--green)",marginBottom:3,fontSize:14}}>
-                  Video Unlocked · 影片已解鎖
-                </div>
-                <div style={{fontSize:12,color:"var(--text-muted)"}}>
-                  Full HD, no watermark · 高清無浮水印 · Valid for 30 days
-                </div>
-              </div>
-            </div>
-          ) : (
-            /* Purchase / unlock section */
-            <>
+          <>
               {/* Price card — single only */}
               <div style={{
-                background:"var(--surface2)",borderRadius:10,
-                padding:"16px 20px",border:"1px solid var(--border)",
+                background:"linear-gradient(135deg, var(--gold-bg), rgba(255,255,255,0.03))",borderRadius:10,
+                padding:"18px 20px",border:"1px solid rgba(200,160,60,0.28)",
                 marginBottom:16,
                 display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12,
               }}>
@@ -618,12 +555,12 @@ function VideoModal({ video, inCart, onAddCart, onRemoveCart, onClose, onUnlock,
                     Single video · 單支購買
                   </div>
                   <div style={{
-                    fontSize:32,fontWeight:700,color:"var(--gold)",
+                    fontSize:42,fontWeight:800,color:"var(--gold)",
                     fontFamily:"var(--font-display)",lineHeight:1,
-                  }}>US$10</div>
-                  <div style={{fontSize:11,color:"var(--text-dim)",marginTop:5}}>
-                    Full HD · No watermark · 30-day access<br/>
-                    高清無浮水印 · 30 天觀看
+                  }}>US${VIDEO_PRICE}</div>
+                  <div style={{fontSize:11,color:"var(--text-dim)",marginTop:7,lineHeight:1.5}}>
+                    Full quality file delivered manually by Jim<br/>
+                    私訊付款後，由 Jim 親自傳無浮水印版本
                   </div>
                 </div>
                 <div style={{display:"flex",flexDirection:"column",gap:8,minWidth:160}}>
@@ -650,43 +587,15 @@ function VideoModal({ video, inCart, onAddCart, onRemoveCart, onClose, onUnlock,
                 </div>
               </div>
 
-              {/* Unlock code section */}
               <div style={{
                 padding:"14px 16px",background:"var(--surface2)",
                 borderRadius:10,border:"1px solid var(--border)",
+                fontSize:12,color:"var(--text-muted)",lineHeight:1.6,
               }}>
-                <div style={{fontSize:12,color:"var(--text-muted)",marginBottom:10,fontWeight:600}}>
-                  Already purchased? Enter unlock code · 已付款？輸入取片碼
-                </div>
-                <div style={{display:"flex",gap:8}}>
-                  <input
-                    value={code}
-                    onChange={e => { setCode(e.target.value); setCodeErr(""); }}
-                    onKeyDown={e => e.key==="Enter" && tryUnlock()}
-                    placeholder="Unlock code · 取片碼"
-                    style={{
-                      flex:1,padding:"9px 13px",
-                      background:"var(--bg)",border:"1px solid var(--border)",
-                      borderRadius:7,color:"var(--text)",fontSize:13,
-                      outline:"none",fontFamily:"var(--font-body)",
-                    }}
-                  />
-                  <button onClick={tryUnlock} style={{
-                    padding:"9px 18px",
-                    background:"var(--green)",border:"none",
-                    borderRadius:7,color:"white",
-                    fontSize:13,fontWeight:600,cursor:"pointer",flexShrink:0,
-                  }}>Unlock</button>
-                </div>
-                {codeErr && (
-                  <div style={{marginTop:7,fontSize:11,color:"oklch(65% 0.2 25)"}}>{codeErr}</div>
-                )}
-                <div style={{marginTop:7,fontSize:10,color:"var(--text-dim)"}}>
-                  Demo code for testing: <span style={{color:"var(--text-muted)",fontWeight:600}}>TZF2026</span>
-                </div>
+                After payment, DM the video code <span style={{color:"var(--gold)",fontWeight:700}}>{video.code}</span> to @jimframe. Jim will send the final file directly.<br/>
+                付款後請私訊影片編號 <span style={{color:"var(--gold)",fontWeight:700}}>{video.code}</span>，Jim 會人工傳檔給你。
               </div>
             </>
-          )}
         </div>
       </div>
     </div>
@@ -696,7 +605,7 @@ function VideoModal({ video, inCart, onAddCart, onRemoveCart, onClose, onUnlock,
 // ─── Cart Sidebar ─────────────────────────────────────────────────────────────
 function CartSidebar({ cart, videos, onRemove, onClose, onCheckout }) {
   const cartVids = videos.filter(v => cart.includes(v.id));
-  const total = cartVids.length * 10;
+  const total = cartVids.length * VIDEO_PRICE;
   const contactUrl = "https://www.instagram.com/jimframe/";
   const paypalUrl = `https://paypal.me/jimframe/${total}`;
 
@@ -760,7 +669,7 @@ function CartSidebar({ cart, videos, onRemove, onClose, onCheckout }) {
               <div style={{fontSize:10,color:"var(--text-dim)",marginTop:1}}>{v.day} · {v.category}</div>
             </div>
             <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4,flexShrink:0}}>
-              <span style={{fontSize:12,fontWeight:700,color:"var(--gold)"}}>$10</span>
+              <span style={{fontSize:12,fontWeight:800,color:"var(--gold)"}}>US${VIDEO_PRICE}</span>
               <button onClick={() => onRemove(v.id)} style={{
                 background:"none",border:"none",color:"var(--text-dim)",
                 cursor:"pointer",fontSize:10,padding:0,
@@ -791,7 +700,7 @@ function CartSidebar({ cart, videos, onRemove, onClose, onCheckout }) {
             }}>PayPal US${total} · PayPal 付款</a>
           </div>
           <div style={{fontSize:10,color:"var(--text-dim)",textAlign:"center",lineHeight:1.5,marginBottom:10}}>
-            After payment, DM the selected video codes to @jimframe.
+            After payment, DM the selected video codes to @jimframe. Jim will send the files directly.
           </div>
           <div style={{display:"flex",gap:5,justifyContent:"center",flexWrap:"wrap"}}>
             {["Contact @jimframe","PayPal"].map(m => (
@@ -809,9 +718,9 @@ function CartSidebar({ cart, videos, onRemove, onClose, onCheckout }) {
 }
 
 // ─── Buy Now Modal ────────────────────────────────────────────────────────────
-function BuyNowModal({ video, onClose, onPaid }) {
+function BuyNowModal({ video, onClose }) {
   const contactUrl = "https://www.instagram.com/jimframe/";
-  const paypalUrl = "https://paypal.me/jimframe/10";
+  const paypalUrl = `https://paypal.me/jimframe/${VIDEO_PRICE}`;
 
   useEffect(() => {
     const fn = e => { if (e.key === "Escape") onClose(); };
@@ -845,10 +754,11 @@ function BuyNowModal({ video, onClose, onPaid }) {
           <div style={{
             display:"flex",justifyContent:"space-between",alignItems:"baseline",
             marginBottom:20,padding:"12px 16px",
-            background:"var(--surface2)",borderRadius:8,border:"1px solid var(--border)",
+            background:"linear-gradient(135deg, var(--gold-bg), rgba(255,255,255,0.03))",
+            borderRadius:8,border:"1px solid rgba(200,160,60,0.28)",
           }}>
             <span style={{fontSize:12,color:"var(--text-muted)"}}>Single video · 單支</span>
-            <span style={{fontSize:22,fontWeight:700,color:"var(--gold)",fontFamily:"var(--font-display)"}}>US$10</span>
+            <span style={{fontSize:30,fontWeight:800,color:"var(--gold)",fontFamily:"var(--font-display)"}}>US${VIDEO_PRICE}</span>
           </div>
 
           <div style={{fontSize:12,color:"var(--text-muted)",marginBottom:10,fontWeight:600}}>
@@ -881,7 +791,7 @@ function BuyNowModal({ video, onClose, onPaid }) {
                 textDecoration:"none",letterSpacing:0.3,
               }}
             >
-              PayPal US$10 · PayPal 付款
+              PayPal US${VIDEO_PRICE} · PayPal 付款
             </a>
           </div>
 
@@ -890,8 +800,8 @@ function BuyNowModal({ video, onClose, onPaid }) {
             background:"rgba(255,255,255,0.03)",border:"1px solid var(--border)",
             fontSize:11,color:"var(--text-muted)",lineHeight:1.6,
           }}>
-            After payment, please DM the video code <span style={{color:"var(--gold)",fontWeight:700}}>{video.code}</span> to @jimframe.<br/>
-            付款後請私訊影片編號 <span style={{color:"var(--gold)",fontWeight:700}}>{video.code}</span>，我會直接傳無浮水印版本給你。
+            After payment, please DM the video code <span style={{color:"var(--gold)",fontWeight:700}}>{video.code}</span> to @jimframe. Jim will send the file directly.<br/>
+            付款後請私訊影片編號 <span style={{color:"var(--gold)",fontWeight:700}}>{video.code}</span>，Jim 會人工傳檔給你。
           </div>
         </div>
       </div>
@@ -905,20 +815,11 @@ function App() {
 
   const [tweaks, setTweak] = useTweaks(/*EDITMODE-BEGIN*/{
     "gridCols": "4",
-    "compactCards": false,
-    "showUnlocked": false
+    "compactCards": false
   }/*EDITMODE-END*/);
 
   const [videos, setVideos]         = useState(CLOUD_VIDEOS);
 
-  const handleFilesAdded = useCallback((newVids) => {
-    setVideos(prev => {
-      // Avoid duplicates by fileName
-      const existing = new Set(prev.map(v => v.fileName).filter(Boolean));
-      const toAdd = newVids.filter(v => !existing.has(v.fileName));
-      return [...prev, ...toAdd];
-    });
-  }, []);
   const [search, setSearch]         = useState("");
   const [activeCategory, setActiveCategory] = useState("All / 全部");
   const [activeDay, setActiveDay]   = useState("All Days / 全部");
@@ -926,7 +827,6 @@ function App() {
   const [cartOpen, setCartOpen]     = useState(false);
   const [selectedVideo, setSelectedVideo] = useState(null);
   const [buyVideo, setBuyVideo]     = useState(null);
-  const [checkoutMsg, setCheckoutMsg] = useState("");
   const [sortBy, setSortBy]         = useState("default");
 
   const cols = parseInt(tweaks.gridCols) || 4;
@@ -942,25 +842,13 @@ function App() {
     );
     if (activeCategory !== "All / 全部") v = v.filter(x => x.category === activeCategory);
     if (activeDay !== "All Days / 全部") v = v.filter(x => x.day === activeDay);
-    if (tweaks.showUnlocked) v = v.filter(x => x.unlocked);
     if (sortBy === "code") v = [...v].sort((a,b) => a.code.localeCompare(b.code));
     if (sortBy === "day") v = [...v].sort((a,b) => a.day.localeCompare(b.day));
     return v;
-  }, [search, activeCategory, activeDay, tweaks.showUnlocked, sortBy, videos]);
+  }, [search, activeCategory, activeDay, sortBy, videos]);
 
   const addCart    = id => setCart(c => c.includes(id) ? c : [...c, id]);
   const removeCart = id => setCart(c => c.filter(x => x !== id));
-  const unlockOne  = id => setVideos(vs => vs.map(v => v.id===id ? {...v,unlocked:true} : v));
-  const checkout   = () => {
-    setVideos(vs => vs.map(v => cart.includes(v.id) ? {...v,unlocked:true} : v));
-    setCart([]);
-    setCartOpen(false);
-    setCheckoutMsg(`${cart.length} video${cart.length>1?"s":""} unlocked successfully! · ${cart.length} 支影片已解鎖！`);
-    setTimeout(() => setCheckoutMsg(""), 6000);
-  };
-
-  const unlockedCount = videos.filter(v => v.unlocked).length;
-
   return (
     <div style={{minHeight:"100vh",background:"var(--bg)",fontFamily:"var(--font-body)"}}>
 
@@ -1026,19 +914,6 @@ function App() {
             <span style={{color:"var(--gold)"}}>@jimframe</span>
           </a>
 
-          {/* Unlocked count */}
-          {unlockedCount > 0 && (
-            <div style={{
-              fontSize:11,color:"var(--green)",fontWeight:600,
-              display:"flex",alignItems:"center",gap:5,
-            }}>
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-              {unlockedCount} unlocked
-            </div>
-          )}
-
           {/* Cart */}
           <button
             onClick={() => setCartOpen(v=>!v)}
@@ -1100,7 +975,7 @@ function App() {
               }}>Taiwan Zouk Festival<br/><em>2026</em></h1>
               <p style={{fontSize:13,color:"var(--text-muted)",maxWidth:460,lineHeight:1.6}}>
                 May 1–3, 2026 · Syntrend 12F, Taipei<br/>
-                {videos.length} cloud videos loaded from Google Drive · Watermark preview · Purchase to unlock HD
+                {videos.length} cloud videos loaded from Google Drive · Watermark preview · Message @jimframe after payment
               </p>
               <a
                 href="https://www.instagram.com/jimframe/"
@@ -1130,26 +1005,12 @@ function App() {
                 padding:"12px 18px",background:"rgba(255,255,255,0.03)",
                 border:"1px solid var(--border)",borderRadius:8,textAlign:"center",
               }}>
-                <div style={{fontSize:24,fontWeight:700,color:"var(--text)",fontFamily:"var(--font-display)"}}>US$10</div>
+                <div style={{fontSize:30,fontWeight:800,color:"var(--gold)",fontFamily:"var(--font-display)"}}>US${VIDEO_PRICE}</div>
                 <div style={{fontSize:10,color:"var(--text-muted)",marginTop:2}}>Per video · 單支</div>
               </div>
             </div>
           </div>
         </div>
-
-        {/* ── Checkout success message ── */}
-        {checkoutMsg && (
-          <div style={{
-            marginBottom:20,padding:"12px 18px",
-            background:"oklch(72% 0.18 145 / 0.08)",
-            borderRadius:8,border:"1px solid oklch(72% 0.18 145 / 0.22)",
-            display:"flex",alignItems:"center",gap:10,
-            animation:"slideUp 0.2s ease",fontSize:13,
-          }}>
-            <span>🎉</span>
-            <span style={{color:"var(--green)",fontWeight:600}}>{checkoutMsg}</span>
-          </div>
-        )}
 
         {/* ── Filters ── */}
         <div style={{
@@ -1225,21 +1086,19 @@ function App() {
       {cartOpen && (
         <CartSidebar cart={cart} videos={videos}
           onRemove={removeCart} onClose={()=>setCartOpen(false)}
-          onCheckout={checkout}/>
+        />
       )}
       {selectedVideo && (
         <VideoModal video={selectedVideo}
           inCart={cart.includes(selectedVideo.id)}
           onAddCart={addCart} onRemoveCart={removeCart}
           onClose={()=>setSelectedVideo(null)}
-          onUnlock={id=>{unlockOne(id); setSelectedVideo(v=>v?{...v,unlocked:true}:v);}}
           onBuyNow={v=>{setSelectedVideo(null); setBuyVideo(v);}}
         />
       )}
       {buyVideo && (
         <BuyNowModal video={buyVideo}
           onClose={()=>setBuyVideo(null)}
-          onPaid={id=>{unlockOne(id); setBuyVideo(null);}}
         />
       )}
 
@@ -1248,9 +1107,6 @@ function App() {
         <TweakSection label="Layout · 格局">
           <TweakRadio label="Columns · 欄數" id="gridCols" options={["3","4","5","6"]}/>
           <TweakToggle label="Compact cards · 緊湊" id="compactCards"/>
-        </TweakSection>
-        <TweakSection label="Filter · 篩選">
-          <TweakToggle label="Show unlocked only · 只顯示已解鎖" id="showUnlocked"/>
         </TweakSection>
       </TweaksPanel>
     </div>
