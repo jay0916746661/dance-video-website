@@ -55,7 +55,7 @@ const { useState, useEffect, useRef, useMemo, useCallback } = React;
 // ─── Google Drive Config ──────────────────────────────────────────────────────
 // Watermark preview folder (public)
 const GDRIVE_FOLDER_ID = "1FWQYxw_np-4om33BIBuoQK5x3vqh48FX";
-const GDRIVE_API_KEY   = ""; // Leave blank → use public folder RSS fallback
+const DRIVE_FEED_URL   = ""; // Paste your published Apps Script Web App URL here
 
 // Google Drive helpers
 function gdThumb(fileId) {
@@ -88,36 +88,6 @@ function parseName(name) {
     category: cats[idx],
     title:    base,
   };
-}
-
-// ─── Fetch files from public GDrive folder via claude helper ─────────────────
-// We use the Claude AI helper to call GDrive (avoids CORS / API key issues in static HTML)
-async function fetchDriveFiles() {
-  try {
-    const result = await window.claude.complete({
-      messages: [{
-        role: "user",
-        content: `Call the Google Drive API to list video files in the public folder with ID: ${GDRIVE_FOLDER_ID}.
-Use this URL (no auth needed for public folders):
-https://drive.google.com/drive/folders/${GDRIVE_FOLDER_ID}
-
-Actually, just return a JSON array of the video filenames and file IDs you can infer.
-Since this is a public folder named "0503 TZF(watermark)", return placeholder data for 90 dance videos.
-Format: [{"id":"file_id","name":"TZF 2026 - DAY X - CNNNN.mp4"}, ...]
-Generate realistic file names following pattern: TZF 2026 - DAY [1/2/3] - C[5430-5520].mp4
-Return ONLY the JSON array, no other text.`
-      }]
-    });
-    // Parse JSON from response
-    const match = result.match(/\[[\s\S]*\]/);
-    if (match) {
-      const arr = JSON.parse(match[0]);
-      return arr;
-    }
-    return null;
-  } catch(e) {
-    return null;
-  }
 }
 
 // ─── Google Drive videos ─────────────────────────────────────────────────────
@@ -174,19 +144,40 @@ const DRIVE_FILES = [
   { id: "1OyfAbt7I5BmckHfTDUw-JZxsKRyPKej1", name: "0502 TZF 49.m4v" },
 ];
 
-const CLOUD_VIDEOS = DRIVE_FILES.map((file, i) => {
-  const meta = parseName(file.name);
-  return {
-    id: file.id,
-    gdFileId: file.id,
-    code: meta.code,
-    title: meta.title,
-    day: meta.day,
-    category: meta.category,
-    price: VIDEO_PRICE,
-    fileName: file.name,
-  };
-});
+function mapDriveFilesToVideos(files) {
+  return files.map((file) => {
+    const meta = parseName(file.name);
+    return {
+      id: file.id,
+      gdFileId: file.id,
+      code: meta.code,
+      title: meta.title,
+      day: meta.day,
+      category: meta.category,
+      price: VIDEO_PRICE,
+      fileName: file.name,
+    };
+  });
+}
+
+async function fetchDriveFeed() {
+  if (!DRIVE_FEED_URL) return null;
+  try {
+    const url = `${DRIVE_FEED_URL}${DRIVE_FEED_URL.includes("?") ? "&" : "?"}t=${Date.now()}`;
+    const response = await fetch(url, { cache: "no-store" });
+    if (!response.ok) throw new Error(`Feed request failed: ${response.status}`);
+    const payload = await response.json();
+    if (!Array.isArray(payload?.files)) throw new Error("Feed payload missing files array.");
+    return payload.files
+      .filter(file => file?.id && file?.name)
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }));
+  } catch (error) {
+    console.error("Drive feed fetch failed", error);
+    return null;
+  }
+}
+
+const STATIC_CLOUD_VIDEOS = mapDriveFilesToVideos(DRIVE_FILES);
 
 // ─── Upload Zone ─────────────────────────────────────────────────────────────
 function UploadZone({ onFilesAdded }) {
@@ -855,7 +846,8 @@ function App() {
     "compactCards": false
   }/*EDITMODE-END*/);
 
-  const [videos, setVideos]         = useState(CLOUD_VIDEOS);
+  const [videos, setVideos]         = useState(STATIC_CLOUD_VIDEOS);
+  const [syncMessage, setSyncMessage] = useState(DRIVE_FEED_URL ? "Syncing latest Drive videos..." : "");
 
   const [search, setSearch]         = useState("");
   const [activeCategory, setActiveCategory] = useState("All / 全部");
@@ -868,6 +860,22 @@ function App() {
   const [sortBy, setSortBy]         = useState("default");
 
   const cols = parseInt(tweaks.gridCols) || 4;
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!DRIVE_FEED_URL) return;
+
+    fetchDriveFeed().then(files => {
+      if (cancelled || !files) {
+        if (!cancelled) setSyncMessage("Using cached video list.");
+        return;
+      }
+      setVideos(mapDriveFilesToVideos(files));
+      setSyncMessage(`Live synced ${files.length} videos from Drive.`);
+    });
+
+    return () => { cancelled = true; };
+  }, []);
 
   const filtered = useMemo(() => {
     let v = videos;
@@ -1057,6 +1065,12 @@ function App() {
           display:"flex",gap:10,alignItems:"center",
           flexWrap:"wrap",marginBottom:18,
         }}>
+          {syncMessage && (
+            <div style={{
+              width:"100%",marginBottom:2,
+              fontSize:11,color:"var(--text-dim)",
+            }}>{syncMessage}</div>
+          )}
           {/* Category pills */}
           <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
             {CATEGORIES.map(cat => (
