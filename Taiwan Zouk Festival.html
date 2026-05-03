@@ -75,12 +75,13 @@ function parseName(name) {
   const base = name.replace(/\.(mp4|mov|avi|mkv|webm)$/i, "");
   const dayMatch = base.match(/day\s*(\d)/i);
   const codeMatch = base.match(/[cC](\d{4,5})/);
+  const tzfMatch = base.match(/tzf\s*(\d+)/i);
   const cats = ["Workshop","Jack & Jill","Party","Pre-party","Social Dance"];
   // simple heuristic by code suffix
-  const idx = codeMatch ? parseInt(codeMatch[1]) % cats.length : 0;
+  const idx = (codeMatch || tzfMatch) ? parseInt((codeMatch || tzfMatch)[1]) % cats.length : 0;
   return {
     day:      dayMatch ? `Day ${dayMatch[1]}` : "Day 1",
-    code:     codeMatch ? `C${codeMatch[1]}` : base.slice(0,10),
+    code:     codeMatch ? `C${codeMatch[1]}` : tzfMatch ? `TZF ${tzfMatch[1]}` : base.slice(0,10),
     category: cats[idx],
     title:    base,
   };
@@ -116,23 +117,37 @@ Return ONLY the JSON array, no other text.`
   }
 }
 
-// ─── Static fallback data (90 videos) ────────────────────────────────────────
-// In production: replace gdFileId with real Google Drive file IDs
-// after uploading to the folder. The thumbnail + embed URLs auto-update.
-const FALLBACK_VIDEOS = Array.from({ length: 90 }, (_, i) => {
-  const num = 5431 + i;
-  const dayNum = i < 30 ? 1 : i < 60 ? 2 : 3;
-  const cats = ["Social Dance","Workshop","Jack & Jill","Party","Pre-party"];
-  const cat = cats[i % cats.length];
+// ─── Google Drive videos ─────────────────────────────────────────────────────
+const DRIVE_FILES = [
+  { id: "1AUdIYXFxLJApVk5AKt2bpKpqTdBReNP5", name: "0502 TZF 1.m4v" },
+  { id: "11Xc0nzOp3KYKIelWBVibwQmjrQHlXDEw", name: "0502 TZF 3.m4v" },
+  { id: "1130nWg_ACvZ2bzB6gYM1xnORVzKPSCT_", name: "0502 TZF 4.m4v" },
+  { id: "16IOt0uaE7CnA45y76XF-YB3kyNI3fhZr", name: "0502 TZF 5.m4v" },
+  { id: "1kHHy3IeuKoyowZla7H-VJHoul-SdtivT", name: "0502 TZF 6.m4v" },
+  { id: "1YKmUKyr-EWofoPXpJLnDUKEPcNYxMfFX", name: "0502 TZF 7.m4v" },
+  { id: "15-UwBAKsX3owgi0VWmLCbZEuAsvfT6PJ", name: "0502 TZF 8.m4v" },
+  { id: "1Bimlex2t55mfwB_iQbP4_pFFTJoz79bs", name: "0502 TZF 9.m4v" },
+  { id: "1UizDq1MuZxVSfL4OpiWJrctAx9R_LOy5", name: "0502 TZF 10.m4v" },
+  { id: "1Ud7mmVlESmkRuL14Mc1QcqMvZivEWMCv", name: "0502 TZF 11.m4v" },
+  { id: "17O9kBJtVeP2JdigvHmd3NUcOZ8fYF0tj", name: "0502 TZF 12.m4v" },
+  { id: "1MknmK_VuaPxDrmYp1vtb4B_zU2wm3m-e", name: "0502 TZF 13.m4v" },
+  { id: "1W6TGia00wI0hJk8nJqyS04pSsLbo7UhL", name: "0502 TZF 14.m4v" },
+  { id: "15v2ZzjkSLu-EhiqLM_JiZ6UgNU4SSp22", name: "0502 TZF 15.m4v" },
+  { id: "174DOMLNVlHA897aeZ1iM418V1PIZG2VG", name: "0502 TZF 16.m4v" },
+];
+
+const CLOUD_VIDEOS = DRIVE_FILES.map((file, i) => {
+  const meta = parseName(file.name);
   return {
-    id: `gdrive_${num}`,           // ← replace with real GDrive file ID
-    gdFileId: null,                 // ← null = show placeholder
-    code: `C${num}`,
-    title: `TZF 2026 — Day ${dayNum} — C${num}`,
-    day: `Day ${dayNum}`,
-    category: cat,
+    id: file.id,
+    gdFileId: file.id,
+    code: meta.code,
+    title: meta.title,
+    day: meta.day,
+    category: meta.category,
     price: 10,
     unlocked: false,
+    fileName: file.name,
   };
 });
 
@@ -894,8 +909,7 @@ function App() {
     "showUnlocked": false
   }/*EDITMODE-END*/);
 
-  const [videos, setVideos]         = useState([]);
-  const [loading, setLoading]       = useState(false);
+  const [videos, setVideos]         = useState(CLOUD_VIDEOS);
 
   const handleFilesAdded = useCallback((newVids) => {
     setVideos(prev => {
@@ -916,13 +930,6 @@ function App() {
   const [sortBy, setSortBy]         = useState("default");
 
   const cols = parseInt(tweaks.gridCols) || 4;
-
-  // Try fetching real drive files on mount
-  useEffect(() => {
-    // If we have a real API key, could fetch here.
-    // For now, FALLBACK_VIDEOS are used.
-    // To connect real GDrive: replace gdFileId in FALLBACK_VIDEOS with actual file IDs.
-  }, []);
 
   const filtered = useMemo(() => {
     let v = videos;
@@ -1093,7 +1100,7 @@ function App() {
               }}>Taiwan Zouk Festival<br/><em>2026</em></h1>
               <p style={{fontSize:13,color:"var(--text-muted)",maxWidth:460,lineHeight:1.6}}>
                 May 1–3, 2026 · Syntrend 12F, Taipei<br/>
-                {videos.length > 0 ? `${videos.length} dance videos uploaded` : "Upload your videos below to get started"} · Watermark preview · Purchase to unlock HD
+                {videos.length} cloud videos loaded from Google Drive · Watermark preview · Purchase to unlock HD
               </p>
               <a
                 href="https://www.instagram.com/jimframe/"
@@ -1129,9 +1136,6 @@ function App() {
             </div>
           </div>
         </div>
-
-        {/* ── Upload Zone ── */}
-        <UploadZone onFilesAdded={handleFilesAdded} />
 
         {/* ── Checkout success message ── */}
         {checkoutMsg && (
