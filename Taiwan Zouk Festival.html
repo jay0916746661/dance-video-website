@@ -400,6 +400,57 @@ function VideoCard({ video, inCart, onAddCart, onRemoveCart, onOpen, compact }) 
   );
 }
 
+function TenSecondPreviewVideo({ src }) {
+  const ref = useRef(null);
+  const [ended, setEnded] = useState(false);
+  const PREVIEW_SECONDS = 10;
+
+  const restart = () => {
+    const el = ref.current;
+    if (!el) return;
+    el.currentTime = 0;
+    setEnded(false);
+    el.play().catch(() => {});
+  };
+
+  const stopAtPreviewLimit = e => {
+    if (e.currentTarget.currentTime < PREVIEW_SECONDS) return;
+    e.currentTarget.pause();
+    e.currentTarget.currentTime = PREVIEW_SECONDS;
+    setEnded(true);
+  };
+
+  return (
+    <>
+      <video
+        ref={ref}
+        src={src}
+        autoPlay
+        muted
+        playsInline
+        preload="auto"
+        onLoadedMetadata={e => { e.currentTarget.currentTime = 0; }}
+        onTimeUpdate={stopAtPreviewLimit}
+        onSeeking={stopAtPreviewLimit}
+        style={{
+          position:"absolute",inset:0,
+          width:"100%",height:"100%",
+          objectFit:"contain",background:"#000",
+        }}
+      />
+      {ended && (
+        <button onClick={restart} style={{
+          position:"absolute",left:"50%",top:"50%",transform:"translate(-50%,-50%)",
+          zIndex:12,padding:"10px 16px",borderRadius:8,
+          background:"rgba(0,0,0,0.72)",border:"1px solid rgba(255,255,255,0.22)",
+          color:"white",fontSize:13,fontWeight:700,cursor:"pointer",
+          backdropFilter:"blur(8px)",
+        }}>Replay 10s Preview · 重看 10 秒</button>
+      )}
+    </>
+  );
+}
+
 // ─── Video Modal ──────────────────────────────────────────────────────────────
 function VideoModal({ video, inCart, onAddCart, onRemoveCart, onClose, onUnlock, onBuyNow }) {
   const [tab, setTab] = useState("preview"); // "preview" | "unlock"
@@ -430,7 +481,7 @@ function VideoModal({ video, inCart, onAddCart, onRemoveCart, onClose, onUnlock,
       <div onClick={e=>e.stopPropagation()} style={{
         background:"var(--surface)",borderRadius:14,
         border:"1px solid var(--border)",
-        width:"min(820px,96vw)",maxHeight:"93vh",
+        width:"min(560px,96vw)",maxHeight:"93vh",
         overflow:"auto",animation:"slideUp 0.22s ease",
         position:"relative",
       }}>
@@ -445,7 +496,8 @@ function VideoModal({ video, inCart, onAddCart, onRemoveCart, onClose, onUnlock,
 
         {/* ── Video player area ── */}
         <div style={{
-          position:"relative",width:"100%",paddingBottom:"56.25%",
+          position:"relative",width:"100%",aspectRatio:"9 / 16",
+          maxHeight:"72vh",
           background:"#050508",borderRadius:"14px 14px 0 0",overflow:"hidden",
         }}>
           {video.unlocked ? (
@@ -468,15 +520,14 @@ function VideoModal({ video, inCart, onAddCart, onRemoveCart, onClose, onUnlock,
             /* Preview: local video (muted) or GDrive embed or placeholder — always with watermark */
             <>
               {localUrl ? (
-                <video src={localUrl} autoPlay muted loop playsInline
-                  style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover"}}/>
+                <TenSecondPreviewVideo src={localUrl} />
               ) : embedUrl ? (
                 <iframe src={embedUrl}
-                  style={{position:"absolute",inset:0,width:"100%",height:"100%",border:"none"}}
+                  style={{position:"absolute",inset:0,width:"100%",height:"100%",border:"none",background:"#000"}}
                   allow="autoplay"/>
               ) : thumbUrl ? (
                 <img src={thumbUrl} alt={video.title}
-                  style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover"}}/>
+                  style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"contain",background:"#000"}}/>
               ) : (
                 <div style={{position:"absolute",inset:0,background:"#0d0d12",
                   display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:8}}>
@@ -494,7 +545,7 @@ function VideoModal({ video, inCart, onAddCart, onRemoveCart, onClose, onUnlock,
                 background:"rgba(0,0,0,0.65)",backdropFilter:"blur(8px)",
                 borderRadius:6,padding:"4px 12px",
                 fontSize:11,color:"rgba(255,255,255,0.65)",fontWeight:600,letterSpacing:1,
-              }}>WATERMARK PREVIEW · 浮水印預覽版</div>
+              }}>10 SEC WATERMARK PREVIEW · 10 秒浮水印預覽</div>
             </>
           )}
         </div>
