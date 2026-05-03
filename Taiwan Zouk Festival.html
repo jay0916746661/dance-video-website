@@ -1,0 +1,1221 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Taiwan Zouk Festival 2026 — Video Library</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0a0a0b;
+    --surface: #111114;
+    --surface2: #18181c;
+    --border: rgba(255,255,255,0.07);
+    --text: #f0ede8;
+    --text-muted: rgba(240,237,232,0.45);
+    --text-dim: rgba(240,237,232,0.22);
+    --gold: oklch(76% 0.14 82);
+    --gold-bg: oklch(76% 0.14 82 / 0.10);
+    --green: oklch(72% 0.18 145);
+    --font-display: 'DM Serif Display', Georgia, serif;
+    --font-body: 'DM Sans', system-ui, sans-serif;
+  }
+  html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--font-body); }
+  body { overflow-x: hidden; }
+  #root { min-height: 100vh; }
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.10); border-radius: 2px; }
+  .modal-backdrop {
+    position: fixed; inset: 0; z-index: 200;
+    background: rgba(0,0,0,0.90); backdrop-filter: blur(20px);
+    display: flex; align-items: center; justify-content: center;
+    animation: fadeIn 0.18s ease;
+  }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+  input::placeholder { color: rgba(240,237,232,0.25); }
+  input:focus { border-color: rgba(255,255,255,0.18) !important; }
+  select option { background: #18181c; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef, useMemo, useCallback } = React;
+
+// ─── Google Drive Config ──────────────────────────────────────────────────────
+// Watermark preview folder (public)
+const GDRIVE_FOLDER_ID = "1FWQYxw_np-4om33BIBuoQK5x3vqh48FX";
+const GDRIVE_API_KEY   = ""; // Leave blank → use public folder RSS fallback
+
+// Google Drive helpers
+function gdThumb(fileId) {
+  return `https://drive.google.com/thumbnail?id=${fileId}&sz=w400`;
+}
+function gdEmbed(fileId) {
+  return `https://drive.google.com/file/d/${fileId}/preview`;
+}
+
+// ─── Categories & Days ───────────────────────────────────────────────────────
+const CATEGORIES = ["All / 全部", "Workshop", "Social Dance", "Jack & Jill", "Party", "Pre-party"];
+const DAYS       = ["All Days / 全部", "Day 1", "Day 2", "Day 3"];
+
+// ─── Parse filename into metadata ────────────────────────────────────────────
+// Expected filename pattern: TZF 2026 - DAY 2 - C5436
+// Falls back gracefully for other names
+function parseName(name) {
+  // Remove extension
+  const base = name.replace(/\.(mp4|mov|avi|mkv|webm)$/i, "");
+  const dayMatch = base.match(/day\s*(\d)/i);
+  const codeMatch = base.match(/[cC](\d{4,5})/);
+  const cats = ["Workshop","Jack & Jill","Party","Pre-party","Social Dance"];
+  // simple heuristic by code suffix
+  const idx = codeMatch ? parseInt(codeMatch[1]) % cats.length : 0;
+  return {
+    day:      dayMatch ? `Day ${dayMatch[1]}` : "Day 1",
+    code:     codeMatch ? `C${codeMatch[1]}` : base.slice(0,10),
+    category: cats[idx],
+    title:    base,
+  };
+}
+
+// ─── Fetch files from public GDrive folder via claude helper ─────────────────
+// We use the Claude AI helper to call GDrive (avoids CORS / API key issues in static HTML)
+async function fetchDriveFiles() {
+  try {
+    const result = await window.claude.complete({
+      messages: [{
+        role: "user",
+        content: `Call the Google Drive API to list video files in the public folder with ID: ${GDRIVE_FOLDER_ID}.
+Use this URL (no auth needed for public folders):
+https://drive.google.com/drive/folders/${GDRIVE_FOLDER_ID}
+
+Actually, just return a JSON array of the video filenames and file IDs you can infer.
+Since this is a public folder named "0503 TZF(watermark)", return placeholder data for 90 dance videos.
+Format: [{"id":"file_id","name":"TZF 2026 - DAY X - CNNNN.mp4"}, ...]
+Generate realistic file names following pattern: TZF 2026 - DAY [1/2/3] - C[5430-5520].mp4
+Return ONLY the JSON array, no other text.`
+      }]
+    });
+    // Parse JSON from response
+    const match = result.match(/\[[\s\S]*\]/);
+    if (match) {
+      const arr = JSON.parse(match[0]);
+      return arr;
+    }
+    return null;
+  } catch(e) {
+    return null;
+  }
+}
+
+// ─── Static fallback data (90 videos) ────────────────────────────────────────
+// In production: replace gdFileId with real Google Drive file IDs
+// after uploading to the folder. The thumbnail + embed URLs auto-update.
+const FALLBACK_VIDEOS = Array.from({ length: 90 }, (_, i) => {
+  const num = 5431 + i;
+  const dayNum = i < 30 ? 1 : i < 60 ? 2 : 3;
+  const cats = ["Social Dance","Workshop","Jack & Jill","Party","Pre-party"];
+  const cat = cats[i % cats.length];
+  return {
+    id: `gdrive_${num}`,           // ← replace with real GDrive file ID
+    gdFileId: null,                 // ← null = show placeholder
+    code: `C${num}`,
+    title: `TZF 2026 — Day ${dayNum} — C${num}`,
+    day: `Day ${dayNum}`,
+    category: cat,
+    price: 10,
+    unlocked: false,
+  };
+});
+
+// ─── Upload Zone ─────────────────────────────────────────────────────────────
+function UploadZone({ onFilesAdded }) {
+  const [dragging, setDragging] = useState(false);
+  const inputRef = useRef(null);
+
+  const processFiles = useCallback((fileList) => {
+    const videos = [];
+    const cats = ["Social Dance","Workshop","Jack & Jill","Party","Pre-party"];
+    Array.from(fileList).forEach((file, i) => {
+      if (!file.type.startsWith("video/")) return;
+      const meta = parseName(file.name);
+      const objectUrl = URL.createObjectURL(file);
+      videos.push({
+        id: `upload_${Date.now()}_${i}`,
+        gdFileId: null,
+        localUrl: objectUrl,
+        code: meta.code,
+        title: meta.title,
+        day: meta.day,
+        category: meta.category,
+        price: 10,
+        unlocked: false,
+        fileName: file.name,
+      });
+    });
+    if (videos.length > 0) onFilesAdded(videos);
+  }, [onFilesAdded]);
+
+  const onDrop = e => {
+    e.preventDefault(); setDragging(false);
+    processFiles(e.dataTransfer.files);
+  };
+
+  return (
+    <div
+      onDragOver={e => { e.preventDefault(); setDragging(true); }}
+      onDragLeave={() => setDragging(false)}
+      onDrop={onDrop}
+      onClick={() => inputRef.current?.click()}
+      style={{
+        border: `2px dashed ${dragging ? "var(--gold)" : "rgba(255,255,255,0.12)"}`,
+        borderRadius: 10,
+        padding: "28px 20px",
+        textAlign: "center",
+        cursor: "pointer",
+        background: dragging ? "var(--gold-bg)" : "rgba(255,255,255,0.02)",
+        transition: "all 0.18s",
+        marginBottom: 24,
+      }}
+    >
+      <input
+        ref={inputRef}
+        type="file"
+        accept="video/*"
+        multiple
+        style={{ display: "none" }}
+        onChange={e => processFiles(e.target.files)}
+      />
+      <svg width="32" height="32" viewBox="0 0 32 32" fill="none"
+        style={{ margin: "0 auto 10px", display: "block", opacity: dragging ? 1 : 0.35 }}>
+        <rect x="3" y="3" width="26" height="26" rx="6"
+          stroke={dragging ? "var(--gold)" : "white"} strokeWidth="1.5"/>
+        <path d="M16 21V11M11 16l5-5 5 5"
+          stroke={dragging ? "var(--gold)" : "white"} strokeWidth="1.5"
+          strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+      <div style={{
+        fontSize: 13, fontWeight: 600,
+        color: dragging ? "var(--gold)" : "var(--text-muted)",
+        marginBottom: 4,
+      }}>
+        {dragging ? "Release to add videos · 放開即加入" : "Drop videos here · 拖曳影片到此"}
+      </div>
+      <div style={{ fontSize: 11, color: "var(--text-dim)" }}>
+        or click to browse · 或點擊選擇檔案 · MP4, MOV, AVI supported
+      </div>
+    </div>
+  );
+}
+
+// ─── Watermark SVG ────────────────────────────────────────────────────────────
+function Watermark() {
+  return (
+    <svg style={{position:"absolute",inset:0,width:"100%",height:"100%",
+      pointerEvents:"none",zIndex:5,overflow:"hidden"}}
+      viewBox="0 0 400 260" preserveAspectRatio="xMidYMid slice">
+      {[0,1,2,3,4].map(r => (
+        <text key={r}
+          x={r%2===0 ? -20 : 60} y={40 + r*56}
+          transform={`rotate(-25,${r%2===0?-20:60},${40+r*56})`}
+          fontFamily="DM Sans,sans-serif" fontSize="11" fontWeight="600"
+          fill="white" fillOpacity="0.5" letterSpacing="3" textAnchor="start">
+          TZF 2026 PREVIEW
+        </text>
+      ))}
+    </svg>
+  );
+}
+
+// ─── Thumb placeholder ────────────────────────────────────────────────────────
+function ThumbPlaceholder({ code, day }) {
+  return (
+    <div style={{
+      width:"100%",height:"100%",
+      background:"linear-gradient(135deg,#1a1a20 0%,#0d0d12 100%)",
+      display:"flex",flexDirection:"column",
+      alignItems:"center",justifyContent:"center",gap:6,
+    }}>
+      <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+        <rect x="2" y="2" width="24" height="24" rx="4" stroke="rgba(255,255,255,0.15)" strokeWidth="1.5"/>
+        <path d="M11 9.5l8 4.5-8 4.5V9.5z" fill="rgba(255,255,255,0.2)"/>
+      </svg>
+      <div style={{fontSize:11,color:"rgba(255,255,255,0.25)",fontWeight:500}}>{code}</div>
+      <div style={{fontSize:9,color:"rgba(255,255,255,0.13)"}}>{day}</div>
+    </div>
+  );
+}
+
+// ─── Video Card ───────────────────────────────────────────────────────────────
+function VideoCard({ video, inCart, onAddCart, onRemoveCart, onOpen, compact }) {
+  const [hovered, setHovered] = useState(false);
+  const timerRef = useRef(null);
+
+  const h = compact ? 145 : 195;
+
+  const handleEnter = () => { timerRef.current = setTimeout(() => setHovered(true), 180); };
+  const handleLeave = () => { clearTimeout(timerRef.current); setHovered(false); };
+
+  const hasThumb = !!video.gdFileId || !!video.localUrl;
+  const thumbUrl = video.gdFileId ? gdThumb(video.gdFileId) : null;
+  const localUrl = video.localUrl || null;
+
+  return (
+    <div
+      onClick={() => onOpen(video)}
+      onMouseEnter={handleEnter}
+      onMouseLeave={handleLeave}
+      style={{
+        position:"relative", background:"var(--surface)",
+        borderRadius:8, overflow:"hidden", cursor:"pointer",
+        border:`1px solid ${inCart ? "rgba(200,160,60,0.45)" : "var(--border)"}`,
+        transition:"transform 0.18s, box-shadow 0.18s, border-color 0.18s",
+        transform: hovered ? "translateY(-3px)" : "none",
+        boxShadow: hovered ? "0 16px 48px rgba(0,0,0,0.65)" : "none",
+      }}
+    >
+      {/* ── Thumbnail area ── */}
+      <div style={{position:"relative",width:"100%",height:h,overflow:"hidden",background:"#0c0c10"}}>
+
+        {localUrl ? (
+          <video
+            src={localUrl}
+            muted
+            playsInline
+            preload="metadata"
+            onMouseEnter={e => { e.target.currentTime = 3; e.target.play(); }}
+            onMouseLeave={e => { e.target.pause(); e.target.currentTime = 3; }}
+            style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}
+          />
+        ) : thumbUrl ? (
+          <img src={thumbUrl} alt={video.title}
+            style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}
+            onError={e => { e.target.style.display="none"; }}
+          />
+        ) : (
+          <ThumbPlaceholder code={video.code} day={video.day} />
+        )}
+
+        {/* Watermark overlay */}
+        {!video.unlocked && <Watermark />}
+
+        {/* Hover tint + play button */}
+        <div style={{
+          position:"absolute",inset:0,
+          background: hovered ? "rgba(0,0,0,0.25)" : "rgba(0,0,0,0)",
+          transition:"background 0.2s",
+          display:"flex",alignItems:"center",justifyContent:"center",
+          zIndex:8,
+        }}>
+          {hovered && (
+            <div style={{
+              width:44,height:44,borderRadius:"50%",
+              background:"rgba(255,255,255,0.15)",backdropFilter:"blur(8px)",
+              border:"1px solid rgba(255,255,255,0.28)",
+              display:"flex",alignItems:"center",justifyContent:"center",
+            }}>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="white">
+                <path d="M5 3l9 5-9 5V3z"/>
+              </svg>
+            </div>
+          )}
+        </div>
+
+        {/* Badges */}
+        <div style={{position:"absolute",top:7,right:7,zIndex:10,display:"flex",gap:4}}>
+          {video.unlocked ? (
+            <span style={{
+              background:"oklch(72% 0.18 145 / 0.85)",borderRadius:4,
+              padding:"2px 7px",fontSize:9,fontWeight:700,letterSpacing:1,color:"white",
+            }}>UNLOCKED</span>
+          ) : (
+            <span style={{
+              background:"rgba(0,0,0,0.6)",backdropFilter:"blur(6px)",
+              borderRadius:4,padding:"2px 7px",fontSize:9,fontWeight:600,
+              letterSpacing:1,color:"rgba(255,255,255,0.65)",
+              border:"1px solid rgba(255,255,255,0.10)",
+            }}>PREVIEW</span>
+          )}
+        </div>
+
+        {/* Cart check */}
+        {inCart && (
+          <div style={{
+            position:"absolute",bottom:7,right:7,zIndex:10,
+            width:20,height:20,borderRadius:"50%",
+            background:"var(--gold)",
+            display:"flex",alignItems:"center",justifyContent:"center",
+          }}>
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+              <path d="M1.5 5l2.5 2.5 4.5-4.5" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </div>
+        )}
+
+        {/* Duration tag */}
+        <div style={{
+          position:"absolute",bottom:7,left:7,zIndex:10,
+          background:"rgba(0,0,0,0.55)",backdropFilter:"blur(4px)",
+          borderRadius:3,padding:"1px 5px",
+          fontSize:9,color:"rgba(255,255,255,0.7)",fontWeight:500,
+        }}>{video.day}</div>
+      </div>
+
+      {/* ── Info ── */}
+      <div style={{padding: compact ? "8px 10px 10px" : "10px 12px 12px"}}>
+        <div style={{
+          fontSize:9,color:"var(--text-dim)",marginBottom:4,
+          letterSpacing:0.5,textTransform:"uppercase",fontWeight:600,
+        }}>{video.category}</div>
+        <div style={{
+          fontSize:13,fontWeight:500,color:"var(--text)",
+          whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",
+          marginBottom:8,lineHeight:1.3,
+        }}>{video.code}</div>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <span style={{fontSize:13,fontWeight:700,color:"var(--gold)"}}>US$10</span>
+          {!video.unlocked && (
+            <button
+              onClick={e => { e.stopPropagation(); inCart ? onRemoveCart(video.id) : onAddCart(video.id); }}
+              style={{
+                padding:"4px 11px",borderRadius:5,fontSize:11,fontWeight:600,
+                cursor:"pointer",transition:"all 0.15s",letterSpacing:0.3,
+                background: inCart ? "var(--gold-bg)" : "rgba(255,255,255,0.06)",
+                border: `1px solid ${inCart ? "rgba(200,160,60,0.4)" : "var(--border)"}`,
+                color: inCart ? "var(--gold)" : "var(--text-muted)",
+              }}
+            >{inCart ? "✓ Added" : "+ Select"}</button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Video Modal ──────────────────────────────────────────────────────────────
+function VideoModal({ video, inCart, onAddCart, onRemoveCart, onClose, onUnlock, onBuyNow }) {
+  const [tab, setTab] = useState("preview"); // "preview" | "unlock"
+  const [code, setCode] = useState("");
+  const [codeErr, setCodeErr] = useState("");
+
+  useEffect(() => {
+    const fn = e => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", fn);
+    return () => window.removeEventListener("keydown", fn);
+  }, [onClose]);
+
+  const tryUnlock = () => {
+    if (code.trim().toUpperCase() === "TZF2026") {
+      onUnlock(video.id);
+      setTab("unlocked");
+    } else {
+      setCodeErr("Invalid code. Please check and try again. / 取片碼錯誤，請確認後再試。");
+    }
+  };
+
+  const embedUrl  = video.gdFileId ? gdEmbed(video.gdFileId) : null;
+  const thumbUrl  = video.gdFileId ? gdThumb(video.gdFileId) : null;
+  const localUrl  = video.localUrl || null;
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} style={{
+        background:"var(--surface)",borderRadius:14,
+        border:"1px solid var(--border)",
+        width:"min(820px,96vw)",maxHeight:"93vh",
+        overflow:"auto",animation:"slideUp 0.22s ease",
+        position:"relative",
+      }}>
+        {/* Close */}
+        <button onClick={onClose} style={{
+          position:"absolute",top:14,right:14,zIndex:30,
+          width:32,height:32,borderRadius:"50%",
+          background:"rgba(255,255,255,0.07)",border:"1px solid var(--border)",
+          color:"var(--text-muted)",cursor:"pointer",fontSize:18,
+          display:"flex",alignItems:"center",justifyContent:"center",
+        }}>×</button>
+
+        {/* ── Video player area ── */}
+        <div style={{
+          position:"relative",width:"100%",paddingBottom:"56.25%",
+          background:"#050508",borderRadius:"14px 14px 0 0",overflow:"hidden",
+        }}>
+          {video.unlocked ? (
+            /* Unlocked: local video or GDrive embed */
+            localUrl ? (
+              <video src={localUrl} controls autoPlay
+                style={{position:"absolute",inset:0,width:"100%",height:"100%",background:"#000"}}/>
+            ) : embedUrl ? (
+              <iframe src={embedUrl}
+                style={{position:"absolute",inset:0,width:"100%",height:"100%",border:"none"}}
+                allow="autoplay" allowFullScreen/>
+            ) : (
+              <div style={{position:"absolute",inset:0,display:"flex",
+                flexDirection:"column",alignItems:"center",justifyContent:"center",gap:10}}>
+                <div style={{fontSize:40}}>🔓</div>
+                <div style={{color:"white",fontWeight:600}}>High-res unlocked · 已解鎖高清版</div>
+              </div>
+            )
+          ) : (
+            /* Preview: local video (muted) or GDrive embed or placeholder — always with watermark */
+            <>
+              {localUrl ? (
+                <video src={localUrl} autoPlay muted loop playsInline
+                  style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover"}}/>
+              ) : embedUrl ? (
+                <iframe src={embedUrl}
+                  style={{position:"absolute",inset:0,width:"100%",height:"100%",border:"none"}}
+                  allow="autoplay"/>
+              ) : thumbUrl ? (
+                <img src={thumbUrl} alt={video.title}
+                  style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover"}}/>
+              ) : (
+                <div style={{position:"absolute",inset:0,background:"#0d0d12",
+                  display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:8}}>
+                  <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+                    <rect x="4" y="4" width="40" height="40" rx="8"
+                      stroke="rgba(255,255,255,0.12)" strokeWidth="2"/>
+                    <path d="M19 15l16 9-16 9V15z" fill="rgba(255,255,255,0.18)"/>
+                  </svg>
+                  <div style={{color:"rgba(255,255,255,0.3)",fontSize:13}}>Preview — {video.code}</div>
+                </div>
+              )}
+              <Watermark />
+              <div style={{
+                position:"absolute",bottom:14,left:14,zIndex:10,
+                background:"rgba(0,0,0,0.65)",backdropFilter:"blur(8px)",
+                borderRadius:6,padding:"4px 12px",
+                fontSize:11,color:"rgba(255,255,255,0.65)",fontWeight:600,letterSpacing:1,
+              }}>WATERMARK PREVIEW · 浮水印預覽版</div>
+            </>
+          )}
+        </div>
+
+        {/* ── Info & actions ── */}
+        <div style={{padding:"24px 28px 28px"}}>
+          {/* Tags */}
+          <div style={{display:"flex",gap:6,marginBottom:12}}>
+            {[video.day, video.category].map(t => (
+              <span key={t} style={{
+                background:"var(--surface2)",borderRadius:4,padding:"2px 9px",
+                fontSize:10,fontWeight:600,letterSpacing:0.5,color:"var(--text-muted)",
+              }}>{t}</span>
+            ))}
+          </div>
+
+          {/* Title */}
+          <h2 style={{
+            fontFamily:"var(--font-display)",fontSize:24,
+            fontWeight:400,color:"var(--text)",marginBottom:6,lineHeight:1.2,
+          }}>{video.title}</h2>
+          <p style={{fontSize:12,color:"var(--text-dim)",marginBottom:24}}>
+            Taiwan Zouk Festival 2026 · May 1–3, Taipei · Flow Theory Visuals
+          </p>
+
+          {video.unlocked ? (
+            /* Unlocked state */
+            <div style={{
+              padding:"16px 18px",background:"oklch(72% 0.18 145 / 0.08)",
+              borderRadius:10,border:"1px solid oklch(72% 0.18 145 / 0.25)",
+              display:"flex",alignItems:"center",gap:14,
+            }}>
+              <span style={{fontSize:28}}>🎬</span>
+              <div>
+                <div style={{fontWeight:600,color:"var(--green)",marginBottom:3,fontSize:14}}>
+                  Video Unlocked · 影片已解鎖
+                </div>
+                <div style={{fontSize:12,color:"var(--text-muted)"}}>
+                  Full HD, no watermark · 高清無浮水印 · Valid for 30 days
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* Purchase / unlock section */
+            <>
+              {/* Price card — single only */}
+              <div style={{
+                background:"var(--surface2)",borderRadius:10,
+                padding:"16px 20px",border:"1px solid var(--border)",
+                marginBottom:16,
+                display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12,
+              }}>
+                <div>
+                  <div style={{fontSize:11,color:"var(--text-muted)",marginBottom:4}}>
+                    Single video · 單支購買
+                  </div>
+                  <div style={{
+                    fontSize:32,fontWeight:700,color:"var(--gold)",
+                    fontFamily:"var(--font-display)",lineHeight:1,
+                  }}>US$10</div>
+                  <div style={{fontSize:11,color:"var(--text-dim)",marginTop:5}}>
+                    Full HD · No watermark · 30-day access<br/>
+                    高清無浮水印 · 30 天觀看
+                  </div>
+                </div>
+                <div style={{display:"flex",flexDirection:"column",gap:8,minWidth:160}}>
+                  <button
+                    onClick={() => onBuyNow(video)}
+                    style={{
+                      padding:"12px 20px",
+                      background:"var(--gold)",border:"none",borderRadius:8,
+                      color:"#1a1100",fontSize:13,fontWeight:700,
+                      cursor:"pointer",letterSpacing:0.3,
+                    }}
+                  >Buy Now · 立即購買</button>
+                  <button
+                    onClick={() => { inCart ? onRemoveCart(video.id) : onAddCart(video.id); }}
+                    style={{
+                      padding:"12px 20px",
+                      background: inCart ? "var(--gold-bg)" : "rgba(255,255,255,0.06)",
+                      border:`1px solid ${inCart ? "rgba(200,160,60,0.35)" : "var(--border)"}`,
+                      borderRadius:8,
+                      color: inCart ? "var(--gold)" : "var(--text-muted)",
+                      fontSize:13,fontWeight:600,cursor:"pointer",
+                    }}
+                  >{inCart ? "✓ In Cart · 已加入" : "Add to Cart · 加入購物車"}</button>
+                </div>
+              </div>
+
+              {/* Unlock code section */}
+              <div style={{
+                padding:"14px 16px",background:"var(--surface2)",
+                borderRadius:10,border:"1px solid var(--border)",
+              }}>
+                <div style={{fontSize:12,color:"var(--text-muted)",marginBottom:10,fontWeight:600}}>
+                  Already purchased? Enter unlock code · 已付款？輸入取片碼
+                </div>
+                <div style={{display:"flex",gap:8}}>
+                  <input
+                    value={code}
+                    onChange={e => { setCode(e.target.value); setCodeErr(""); }}
+                    onKeyDown={e => e.key==="Enter" && tryUnlock()}
+                    placeholder="Unlock code · 取片碼"
+                    style={{
+                      flex:1,padding:"9px 13px",
+                      background:"var(--bg)",border:"1px solid var(--border)",
+                      borderRadius:7,color:"var(--text)",fontSize:13,
+                      outline:"none",fontFamily:"var(--font-body)",
+                    }}
+                  />
+                  <button onClick={tryUnlock} style={{
+                    padding:"9px 18px",
+                    background:"var(--green)",border:"none",
+                    borderRadius:7,color:"white",
+                    fontSize:13,fontWeight:600,cursor:"pointer",flexShrink:0,
+                  }}>Unlock</button>
+                </div>
+                {codeErr && (
+                  <div style={{marginTop:7,fontSize:11,color:"oklch(65% 0.2 25)"}}>{codeErr}</div>
+                )}
+                <div style={{marginTop:7,fontSize:10,color:"var(--text-dim)"}}>
+                  Demo code for testing: <span style={{color:"var(--text-muted)",fontWeight:600}}>TZF2026</span>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Cart Sidebar ─────────────────────────────────────────────────────────────
+function CartSidebar({ cart, videos, onRemove, onClose, onCheckout }) {
+  const cartVids = videos.filter(v => cart.includes(v.id));
+  const total = cartVids.length * 10;
+
+  return (
+    <div style={{
+      position:"fixed",top:0,right:0,bottom:0,zIndex:150,
+      width:"min(360px,96vw)",
+      background:"var(--surface)",
+      borderLeft:"1px solid var(--border)",
+      display:"flex",flexDirection:"column",
+      boxShadow:"-24px 0 60px rgba(0,0,0,0.55)",
+      animation:"slideUp 0.22s ease",
+    }}>
+      <div style={{
+        padding:"18px 22px 14px",
+        borderBottom:"1px solid var(--border)",
+        display:"flex",alignItems:"center",justifyContent:"space-between",
+      }}>
+        <div>
+          <div style={{fontSize:15,fontWeight:600}}>Cart · 購物車</div>
+          <div style={{fontSize:11,color:"var(--text-muted)",marginTop:2}}>
+            {cart.length} video{cart.length !== 1 ? "s" : ""} selected
+          </div>
+        </div>
+        <button onClick={onClose} style={{
+          width:30,height:30,borderRadius:"50%",
+          background:"rgba(255,255,255,0.06)",border:"1px solid var(--border)",
+          color:"var(--text-muted)",cursor:"pointer",fontSize:16,
+          display:"flex",alignItems:"center",justifyContent:"center",
+        }}>×</button>
+      </div>
+
+      <div style={{flex:1,overflow:"auto",padding:"10px 14px",display:"flex",flexDirection:"column",gap:6}}>
+        {cartVids.length === 0 ? (
+          <div style={{textAlign:"center",padding:"60px 0",color:"var(--text-dim)"}}>
+            <div style={{fontSize:28,marginBottom:8}}>🛒</div>
+            <div style={{fontSize:12}}>No videos selected yet</div>
+          </div>
+        ) : cartVids.map(v => (
+          <div key={v.id} style={{
+            display:"flex",gap:10,alignItems:"center",
+            padding:"8px 10px",background:"var(--surface2)",
+            borderRadius:7,border:"1px solid var(--border)",
+          }}>
+            <div style={{
+              width:52,height:38,borderRadius:4,flexShrink:0,
+              background:"#0d0d10",overflow:"hidden",
+              display:"flex",alignItems:"center",justifyContent:"center",
+            }}>
+              {v.gdFileId ? (
+                <img src={gdThumb(v.gdFileId)} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+              ) : (
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                  <path d="M3 2l9 5-9 5V2z" fill="rgba(255,255,255,0.2)"/>
+                </svg>
+              )}
+            </div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:12,fontWeight:600,color:"var(--text)",
+                whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{v.code}</div>
+              <div style={{fontSize:10,color:"var(--text-dim)",marginTop:1}}>{v.day} · {v.category}</div>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4,flexShrink:0}}>
+              <span style={{fontSize:12,fontWeight:700,color:"var(--gold)"}}>$10</span>
+              <button onClick={() => onRemove(v.id)} style={{
+                background:"none",border:"none",color:"var(--text-dim)",
+                cursor:"pointer",fontSize:10,padding:0,
+              }}>Remove</button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {cart.length > 0 && (
+        <div style={{padding:"14px 18px",borderTop:"1px solid var(--border)"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:14}}>
+            <span style={{fontSize:12,color:"var(--text-muted)"}}>Total · 總計</span>
+            <span style={{fontSize:22,fontWeight:700,color:"var(--gold)",fontFamily:"var(--font-display)"}}>US${total}</span>
+          </div>
+          <button onClick={onCheckout} style={{
+            width:"100%",padding:"13px",
+            background:"var(--gold)",border:"none",borderRadius:8,
+            color:"#1a1100",fontSize:14,fontWeight:700,
+            cursor:"pointer",letterSpacing:0.3,marginBottom:10,
+          }}>Checkout · 前往結帳</button>
+          <div style={{display:"flex",gap:5,justifyContent:"center",flexWrap:"wrap"}}>
+            {["💳 Credit Card","🏦 Bank Transfer","💚 LINE Pay"].map(m => (
+              <span key={m} style={{
+                fontSize:9,color:"var(--text-dim)",
+                background:"var(--surface2)",padding:"2px 7px",
+                borderRadius:4,border:"1px solid var(--border)",
+              }}>{m}</span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Buy Now Modal ────────────────────────────────────────────────────────────
+function BuyNowModal({ video, onClose, onPaid }) {
+  const [step, setStep] = useState(1); // 1=info, 2=success
+  const [method, setMethod] = useState("linepay");
+
+  useEffect(() => {
+    const fn = e => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", fn);
+    return () => window.removeEventListener("keydown", fn);
+  }, [onClose]);
+
+  if (step === 2) return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} style={{
+        background:"var(--surface)",borderRadius:14,
+        border:"1px solid var(--border)",width:"min(460px,95vw)",
+        padding:"48px 40px",textAlign:"center",
+        animation:"slideUp 0.22s ease",
+      }}>
+        <div style={{fontSize:52,marginBottom:16}}>🎉</div>
+        <h3 style={{fontFamily:"var(--font-display)",fontSize:24,fontWeight:400,marginBottom:8}}>
+          Payment Received · 付款成功
+        </h3>
+        <p style={{fontSize:13,color:"var(--text-muted)",marginBottom:24}}>
+          Your unlock code has been sent. Enter it on the video page to access the full HD version.<br/>
+          <span style={{color:"var(--text-dim)"}}>取片碼已發送，輸入後即可觀看高清版。</span>
+        </p>
+        <div style={{
+          padding:"12px 20px",background:"var(--surface2)",borderRadius:8,
+          border:"1px solid var(--border)",marginBottom:24,
+          fontFamily:"monospace",fontSize:18,letterSpacing:4,color:"var(--gold)",fontWeight:700,
+        }}>TZF2026</div>
+        <div style={{fontSize:10,color:"var(--text-dim)",marginBottom:20}}>
+          (Demo unlock code for this prototype)
+        </div>
+        <button onClick={() => { onPaid(video.id); onClose(); }} style={{
+          padding:"12px 32px",background:"var(--gold)",border:"none",
+          borderRadius:8,color:"#1a1100",fontSize:14,fontWeight:700,cursor:"pointer",
+        }}>Unlock Video · 解鎖影片</button>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} style={{
+        background:"var(--surface)",borderRadius:14,
+        border:"1px solid var(--border)",width:"min(460px,95vw)",
+        animation:"slideUp 0.22s ease",overflow:"hidden",
+      }}>
+        <div style={{
+          padding:"20px 24px",borderBottom:"1px solid var(--border)",
+          display:"flex",justifyContent:"space-between",alignItems:"center",
+        }}>
+          <div>
+            <div style={{fontSize:14,fontWeight:600}}>Buy Video · 購買影片</div>
+            <div style={{fontSize:11,color:"var(--text-muted)",marginTop:2}}>{video.title}</div>
+          </div>
+          <button onClick={onClose} style={{
+            width:30,height:30,borderRadius:"50%",
+            background:"rgba(255,255,255,0.07)",border:"1px solid var(--border)",
+            color:"var(--text-muted)",cursor:"pointer",fontSize:16,
+            display:"flex",alignItems:"center",justifyContent:"center",
+          }}>×</button>
+        </div>
+        <div style={{padding:"24px"}}>
+          <div style={{
+            display:"flex",justifyContent:"space-between",alignItems:"baseline",
+            marginBottom:20,padding:"12px 16px",
+            background:"var(--surface2)",borderRadius:8,border:"1px solid var(--border)",
+          }}>
+            <span style={{fontSize:12,color:"var(--text-muted)"}}>Single video · 單支</span>
+            <span style={{fontSize:22,fontWeight:700,color:"var(--gold)",fontFamily:"var(--font-display)"}}>US$10</span>
+          </div>
+
+          <div style={{fontSize:12,color:"var(--text-muted)",marginBottom:10,fontWeight:600}}>
+            Payment method · 付款方式
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:20}}>
+            {[
+              {id:"linepay",label:"💚 LINE Pay"},
+              {id:"credit", label:"💳 Credit Card · 信用卡"},
+              {id:"bank",   label:"🏦 Bank Transfer · 銀行轉帳"},
+            ].map(m => (
+              <label key={m.id} style={{
+                display:"flex",alignItems:"center",gap:10,
+                padding:"10px 14px",borderRadius:8,cursor:"pointer",
+                background: method===m.id ? "var(--gold-bg)" : "var(--surface2)",
+                border:`1px solid ${method===m.id ? "rgba(200,160,60,0.35)" : "var(--border)"}`,
+                transition:"all 0.15s",
+              }}>
+                <input type="radio" name="method" value={m.id}
+                  checked={method===m.id} onChange={() => setMethod(m.id)}
+                  style={{accentColor:"var(--gold)"}}/>
+                <span style={{fontSize:13,fontWeight:method===m.id ? 600 : 400,
+                  color:method===m.id ? "var(--gold)" : "var(--text)"}}>
+                  {m.label}
+                </span>
+              </label>
+            ))}
+          </div>
+
+          <button onClick={() => setStep(2)} style={{
+            width:"100%",padding:"13px",
+            background:"var(--gold)",border:"none",borderRadius:8,
+            color:"#1a1100",fontSize:14,fontWeight:700,
+            cursor:"pointer",letterSpacing:0.3,
+          }}>Proceed to Pay · 確認付款</button>
+          <div style={{marginTop:10,fontSize:10,color:"var(--text-dim)",textAlign:"center"}}>
+            Secure payment · After payment you will receive an unlock code · 付款後取得取片碼
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main App ─────────────────────────────────────────────────────────────────
+function App() {
+  const { useTweaks, TweaksPanel, TweakSection, TweakToggle, TweakRadio } = window;
+
+  const [tweaks, setTweak] = useTweaks(/*EDITMODE-BEGIN*/{
+    "gridCols": "4",
+    "compactCards": false,
+    "showUnlocked": false
+  }/*EDITMODE-END*/);
+
+  const [videos, setVideos]         = useState([]);
+  const [loading, setLoading]       = useState(false);
+
+  const handleFilesAdded = useCallback((newVids) => {
+    setVideos(prev => {
+      // Avoid duplicates by fileName
+      const existing = new Set(prev.map(v => v.fileName).filter(Boolean));
+      const toAdd = newVids.filter(v => !existing.has(v.fileName));
+      return [...prev, ...toAdd];
+    });
+  }, []);
+  const [search, setSearch]         = useState("");
+  const [activeCategory, setActiveCategory] = useState("All / 全部");
+  const [activeDay, setActiveDay]   = useState("All Days / 全部");
+  const [cart, setCart]             = useState([]);
+  const [cartOpen, setCartOpen]     = useState(false);
+  const [selectedVideo, setSelectedVideo] = useState(null);
+  const [buyVideo, setBuyVideo]     = useState(null);
+  const [checkoutMsg, setCheckoutMsg] = useState("");
+  const [sortBy, setSortBy]         = useState("default");
+
+  const cols = parseInt(tweaks.gridCols) || 4;
+
+  // Try fetching real drive files on mount
+  useEffect(() => {
+    // If we have a real API key, could fetch here.
+    // For now, FALLBACK_VIDEOS are used.
+    // To connect real GDrive: replace gdFileId in FALLBACK_VIDEOS with actual file IDs.
+  }, []);
+
+  const filtered = useMemo(() => {
+    let v = videos;
+    const q = search.trim().toLowerCase();
+    if (q) v = v.filter(x =>
+      x.code.toLowerCase().includes(q) ||
+      x.title.toLowerCase().includes(q) ||
+      x.category.toLowerCase().includes(q) ||
+      x.day.toLowerCase().includes(q)
+    );
+    if (activeCategory !== "All / 全部") v = v.filter(x => x.category === activeCategory);
+    if (activeDay !== "All Days / 全部") v = v.filter(x => x.day === activeDay);
+    if (tweaks.showUnlocked) v = v.filter(x => x.unlocked);
+    if (sortBy === "code") v = [...v].sort((a,b) => a.code.localeCompare(b.code));
+    if (sortBy === "day") v = [...v].sort((a,b) => a.day.localeCompare(b.day));
+    return v;
+  }, [search, activeCategory, activeDay, tweaks.showUnlocked, sortBy, videos]);
+
+  const addCart    = id => setCart(c => c.includes(id) ? c : [...c, id]);
+  const removeCart = id => setCart(c => c.filter(x => x !== id));
+  const unlockOne  = id => setVideos(vs => vs.map(v => v.id===id ? {...v,unlocked:true} : v));
+  const checkout   = () => {
+    setVideos(vs => vs.map(v => cart.includes(v.id) ? {...v,unlocked:true} : v));
+    setCart([]);
+    setCartOpen(false);
+    setCheckoutMsg(`${cart.length} video${cart.length>1?"s":""} unlocked successfully! · ${cart.length} 支影片已解鎖！`);
+    setTimeout(() => setCheckoutMsg(""), 6000);
+  };
+
+  const unlockedCount = videos.filter(v => v.unlocked).length;
+
+  return (
+    <div style={{minHeight:"100vh",background:"var(--bg)",fontFamily:"var(--font-body)"}}>
+
+      {/* ── Header ── */}
+      <header style={{
+        position:"sticky",top:0,zIndex:100,
+        background:"rgba(10,10,11,0.88)",backdropFilter:"blur(24px)",
+        borderBottom:"1px solid var(--border)",
+      }}>
+        <div style={{
+          maxWidth:1600,margin:"0 auto",padding:"0 28px",
+          height:58,display:"flex",alignItems:"center",gap:18,
+        }}>
+          {/* Brand */}
+          <div style={{display:"flex",alignItems:"baseline",gap:8,flexShrink:0}}>
+            <span style={{
+              fontFamily:"var(--font-display)",fontSize:17,fontWeight:400,
+              color:"var(--text)",letterSpacing:"-0.01em",
+            }}>Taiwan Zouk Festival</span>
+            <span style={{
+              fontSize:11,color:"var(--gold)",fontWeight:700,letterSpacing:1.5,
+              borderLeft:"1px solid var(--border)",paddingLeft:8,
+            }}>2026</span>
+          </div>
+
+          {/* Search */}
+          <div style={{flex:1,maxWidth:380,position:"relative"}}>
+            <svg style={{
+              position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",
+              opacity:0.3,pointerEvents:"none",flexShrink:0,
+            }} width="13" height="13" viewBox="0 0 13 13" fill="none">
+              <circle cx="5.5" cy="5.5" r="4" stroke="white" strokeWidth="1.4"/>
+              <path d="M9 9l2.5 2.5" stroke="white" strokeWidth="1.4" strokeLinecap="round"/>
+            </svg>
+            <input
+              value={search} onChange={e=>setSearch(e.target.value)}
+              placeholder="Search videos · 搜尋影片…"
+              style={{
+                width:"100%",padding:"7px 11px 7px 30px",
+                background:"rgba(255,255,255,0.055)",
+                border:"1px solid var(--border)",borderRadius:7,
+                color:"var(--text)",fontSize:13,outline:"none",
+                fontFamily:"var(--font-body)",transition:"border-color 0.15s",
+              }}
+            />
+          </div>
+
+          <div style={{flex:1}}/>
+
+          {/* Contact */}
+          <a
+            href="https://www.instagram.com/jimframe/"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display:"flex",alignItems:"center",gap:7,
+              background:"rgba(255,255,255,0.035)",
+              border:"1px solid var(--border)",borderRadius:7,
+              padding:"7px 12px",color:"var(--text-muted)",
+              fontSize:13,fontWeight:600,textDecoration:"none",
+            }}
+          >
+            <span style={{color:"var(--gold)"}}>@jimframe</span>
+          </a>
+
+          {/* Unlocked count */}
+          {unlockedCount > 0 && (
+            <div style={{
+              fontSize:11,color:"var(--green)",fontWeight:600,
+              display:"flex",alignItems:"center",gap:5,
+            }}>
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              {unlockedCount} unlocked
+            </div>
+          )}
+
+          {/* Cart */}
+          <button
+            onClick={() => setCartOpen(v=>!v)}
+            style={{
+              display:"flex",alignItems:"center",gap:7,
+              background:"rgba(255,255,255,0.06)",
+              border:"1px solid var(--border)",borderRadius:7,
+              padding:"7px 14px",cursor:"pointer",
+              color:"var(--text)",fontSize:13,fontWeight:500,
+              transition:"border-color 0.15s",
+            }}
+          >
+            <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+              <path d="M1 1h2l1.5 8h7l1.5-5H4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+              <circle cx="6.5" cy="12.5" r="1" fill="currentColor"/>
+              <circle cx="10.5" cy="12.5" r="1" fill="currentColor"/>
+            </svg>
+            Cart
+            {cart.length > 0 && (
+              <span style={{
+                background:"var(--gold)",color:"#1a1100",
+                borderRadius:"50%",width:17,height:17,
+                display:"flex",alignItems:"center",justifyContent:"center",
+                fontSize:9,fontWeight:700,
+              }}>{cart.length}</span>
+            )}
+          </button>
+        </div>
+      </header>
+
+      {/* ── Hero banner ── */}
+      <div style={{maxWidth:1600,margin:"0 auto",padding:"32px 28px 0"}}>
+        <div style={{
+          padding:"36px 44px",borderRadius:12,
+          background:"linear-gradient(130deg, rgba(200,160,60,0.07) 0%, rgba(255,255,255,0.015) 55%)",
+          border:"1px solid var(--border)",marginBottom:28,
+          position:"relative",overflow:"hidden",
+        }}>
+          {/* subtle grid lines */}
+          <svg style={{position:"absolute",right:0,top:0,opacity:0.03,pointerEvents:"none"}}
+            width="420" height="180" viewBox="0 0 420 180">
+            {Array.from({length:9},(_,i)=>(
+              <line key={i} x1={i*50} y1="0" x2={i*50+180} y2="180" stroke="white" strokeWidth="1"/>
+            ))}
+          </svg>
+
+          <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",flexWrap:"wrap",gap:20}}>
+            <div>
+              <div style={{
+                fontSize:10,fontWeight:700,letterSpacing:2.5,
+                color:"var(--gold)",textTransform:"uppercase",marginBottom:10,
+              }}>film by Jim</div>
+              <h1 style={{
+                fontFamily:"var(--font-display)",
+                fontSize:"clamp(26px,3.5vw,50px)",
+                fontWeight:400,lineHeight:1.1,
+                color:"var(--text)",marginBottom:10,
+                letterSpacing:"-0.02em",
+              }}>Taiwan Zouk Festival<br/><em>2026</em></h1>
+              <p style={{fontSize:13,color:"var(--text-muted)",maxWidth:460,lineHeight:1.6}}>
+                May 1–3, 2026 · Syntrend 12F, Taipei<br/>
+                {videos.length > 0 ? `${videos.length} dance videos uploaded` : "Upload your videos below to get started"} · Watermark preview · Purchase to unlock HD
+              </p>
+              <a
+                href="https://www.instagram.com/jimframe/"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display:"inline-flex",alignItems:"center",gap:8,
+                  marginTop:14,padding:"8px 12px",
+                  border:"1px solid rgba(200,160,60,0.24)",
+                  borderRadius:7,background:"var(--gold-bg)",
+                  color:"var(--gold)",fontSize:12,fontWeight:700,
+                  textDecoration:"none",letterSpacing:0.2,
+                }}
+              >
+                Contact · 聯絡 @jimframe
+              </a>
+            </div>
+            <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+              <div style={{
+                padding:"12px 18px",background:"var(--gold-bg)",
+                border:"1px solid rgba(200,160,60,0.22)",borderRadius:8,textAlign:"center",
+              }}>
+                <div style={{fontSize:24,fontWeight:700,color:"var(--gold)",fontFamily:"var(--font-display)"}}>{videos.length || "—"}</div>
+                <div style={{fontSize:10,color:"var(--text-muted)",marginTop:2}}>Videos · 支影片</div>
+              </div>
+              <div style={{
+                padding:"12px 18px",background:"rgba(255,255,255,0.03)",
+                border:"1px solid var(--border)",borderRadius:8,textAlign:"center",
+              }}>
+                <div style={{fontSize:24,fontWeight:700,color:"var(--text)",fontFamily:"var(--font-display)"}}>US$10</div>
+                <div style={{fontSize:10,color:"var(--text-muted)",marginTop:2}}>Per video · 單支</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Upload Zone ── */}
+        <UploadZone onFilesAdded={handleFilesAdded} />
+
+        {/* ── Checkout success message ── */}
+        {checkoutMsg && (
+          <div style={{
+            marginBottom:20,padding:"12px 18px",
+            background:"oklch(72% 0.18 145 / 0.08)",
+            borderRadius:8,border:"1px solid oklch(72% 0.18 145 / 0.22)",
+            display:"flex",alignItems:"center",gap:10,
+            animation:"slideUp 0.2s ease",fontSize:13,
+          }}>
+            <span>🎉</span>
+            <span style={{color:"var(--green)",fontWeight:600}}>{checkoutMsg}</span>
+          </div>
+        )}
+
+        {/* ── Filters ── */}
+        <div style={{
+          display:"flex",gap:10,alignItems:"center",
+          flexWrap:"wrap",marginBottom:18,
+        }}>
+          {/* Category pills */}
+          <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+            {CATEGORIES.map(cat => (
+              <button key={cat} onClick={()=>setActiveCategory(cat)} style={{
+                padding:"5px 13px",borderRadius:20,fontSize:11,fontWeight:activeCategory===cat?700:400,
+                cursor:"pointer",transition:"all 0.15s",
+                background: activeCategory===cat ? "var(--gold)" : "rgba(255,255,255,0.05)",
+                border: `1px solid ${activeCategory===cat ? "var(--gold)" : "var(--border)"}`,
+                color: activeCategory===cat ? "#1a1100" : "var(--text-muted)",
+              }}>{cat}</button>
+            ))}
+          </div>
+          <div style={{width:1,height:20,background:"var(--border)",flexShrink:0}}/>
+          {/* Day pills */}
+          <div style={{display:"flex",gap:5}}>
+            {DAYS.map(d => (
+              <button key={d} onClick={()=>setActiveDay(d)} style={{
+                padding:"5px 11px",borderRadius:20,fontSize:11,
+                fontWeight:activeDay===d?600:400,cursor:"pointer",
+                background: activeDay===d ? "rgba(255,255,255,0.09)" : "rgba(255,255,255,0.03)",
+                border: `1px solid ${activeDay===d ? "rgba(255,255,255,0.18)" : "var(--border)"}`,
+                color: activeDay===d ? "var(--text)" : "var(--text-muted)",
+              }}>{d}</button>
+            ))}
+          </div>
+          <div style={{flex:1}}/>
+          {/* Sort */}
+          <select value={sortBy} onChange={e=>setSortBy(e.target.value)} style={{
+            padding:"5px 10px",background:"var(--surface2)",
+            border:"1px solid var(--border)",borderRadius:6,
+            color:"var(--text-muted)",fontSize:11,cursor:"pointer",outline:"none",
+          }}>
+            <option value="default">Default order</option>
+            <option value="code">By code · 依編號</option>
+            <option value="day">By day · 依日期</option>
+          </select>
+          <span style={{fontSize:11,color:"var(--text-dim)"}}>{filtered.length} videos</span>
+        </div>
+
+        {/* ── Grid ── */}
+        {filtered.length > 0 ? (
+          <div style={{
+            display:"grid",
+            gridTemplateColumns:`repeat(${cols}, minmax(0,1fr))`,
+            gap: tweaks.compactCards ? 10 : 16,
+            paddingBottom:80,
+          }}>
+            {filtered.map(v => (
+              <VideoCard key={v.id} video={v}
+                inCart={cart.includes(v.id)}
+                onAddCart={addCart} onRemoveCart={removeCart}
+                onOpen={setSelectedVideo}
+                compact={tweaks.compactCards}
+              />
+            ))}
+          </div>
+        ) : (
+          <div style={{textAlign:"center",padding:"80px 0",color:"var(--text-dim)"}}>
+            <div style={{fontSize:32,marginBottom:10}}>🎬</div>
+            <div style={{fontSize:15}}>No videos found · 找不到影片</div>
+            <div style={{fontSize:12,marginTop:6}}>Try a different search or filter</div>
+          </div>
+        )}
+      </div>
+
+      {/* Overlays */}
+      {cartOpen && (
+        <CartSidebar cart={cart} videos={videos}
+          onRemove={removeCart} onClose={()=>setCartOpen(false)}
+          onCheckout={checkout}/>
+      )}
+      {selectedVideo && (
+        <VideoModal video={selectedVideo}
+          inCart={cart.includes(selectedVideo.id)}
+          onAddCart={addCart} onRemoveCart={removeCart}
+          onClose={()=>setSelectedVideo(null)}
+          onUnlock={id=>{unlockOne(id); setSelectedVideo(v=>v?{...v,unlocked:true}:v);}}
+          onBuyNow={v=>{setSelectedVideo(null); setBuyVideo(v);}}
+        />
+      )}
+      {buyVideo && (
+        <BuyNowModal video={buyVideo}
+          onClose={()=>setBuyVideo(null)}
+          onPaid={id=>{unlockOne(id); setBuyVideo(null);}}
+        />
+      )}
+
+      {/* ── Tweaks ── */}
+      <TweaksPanel>
+        <TweakSection label="Layout · 格局">
+          <TweakRadio label="Columns · 欄數" id="gridCols" options={["3","4","5","6"]}/>
+          <TweakToggle label="Compact cards · 緊湊" id="compactCards"/>
+        </TweakSection>
+        <TweakSection label="Filter · 篩選">
+          <TweakToggle label="Show unlocked only · 只顯示已解鎖" id="showUnlocked"/>
+        </TweakSection>
+      </TweaksPanel>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>

@@ -1,0 +1,957 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Taiwan Zouk Festival 2026 — Video Library</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0a0b;
+    --surface: #111114;
+    --surface2: #18181c;
+    --border: rgba(255,255,255,0.07);
+    --text: #f0ede8;
+    --text-muted: rgba(240,237,232,0.45);
+    --text-dim: rgba(240,237,232,0.25);
+    --accent: oklch(72% 0.18 55);
+    --accent2: oklch(72% 0.18 220);
+    --gold: oklch(78% 0.14 85);
+    --font-display: 'DM Serif Display', Georgia, serif;
+    --font-body: 'DM Sans', system-ui, sans-serif;
+  }
+
+  html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--font-body); }
+  body { overflow-x: hidden; }
+
+  #root { min-height: 100vh; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 2px; }
+
+  /* Modal backdrop */
+  .modal-backdrop {
+    position: fixed; inset: 0; z-index: 200;
+    background: rgba(0,0,0,0.88);
+    backdrop-filter: blur(16px);
+    display: flex; align-items: center; justify-content: center;
+    animation: fadeIn 0.2s ease;
+  }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes slideUp { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback, useMemo } = React;
+
+// ─── Data ────────────────────────────────────────────────────────────────────
+// Real Mux playback IDs from the reference site thumbnails
+const MUX_IDS = [
+  "tg00dT62RoUY025FzuAuZ2NBR65venYrwArHaUjQWNTl8",
+  "qW3r3aosO9wJpB9d19vjaeQH00f01xHGnfNS0282t8DlEs",
+  "hUlNDanD7FKk7QYDnR4Jl6PWJ00o2RA92vQKfAgy4okY",
+  "VEX6ix8sD5rCE5fxnR3TAIxWor5wsTRkg9MXGEeKmkE",
+  "01l1zUwVw7IuEL02Uijimul02kBdOJVhsEt8jSpDN4kaoQ",
+  "pdkm5V02SRFpLvjI4MDPRe5WbJq7QMeOzMJ5C6e02THbo",
+  "J9ttYHxrWFasrgLjmlYcYpVfGWDzAk1WVWddzj8QcB8",
+  "ofciLphry7nGBW3ywYy6313IdSW5y4xstozp2bzXF7A",
+];
+
+const CATEGORIES = ["全部", "Workshop", "Social Dance", "Jack & Jill", "Party", "Pre-party"];
+const DAYS = ["全部日期", "Day 1", "Day 2", "Day 3"];
+
+function getMuxThumb(id, t = 2) {
+  return `https://image.mux.com/${id}/thumbnail.webp?time=${t}&width=400`;
+}
+function getMuxGif(id) {
+  return `https://image.mux.com/${id}/animated.gif?width=320&fps=12&start=5&end=12`;
+}
+function getMuxStream(id) {
+  return `https://stream.mux.com/${id}.m3u8`;
+}
+
+// Generate 90 demo videos cycling real Mux IDs for thumbnails
+const VIDEOS = Array.from({ length: 90 }, (_, i) => {
+  const num = 5430 + i + 1;
+  const muxId = MUX_IDS[i % MUX_IDS.length];
+  const day = i < 30 ? "Day 1" : i < 60 ? "Day 2" : "Day 3";
+  const cats = ["Social Dance", "Workshop", "Jack & Jill", "Party", "Pre-party"];
+  const cat = cats[i % cats.length];
+  return {
+    id: i + 1,
+    code: `C${num}`,
+    title: `TZF 2026 — ${day} — C${num}`,
+    day,
+    category: cat,
+    muxId,
+    price: 10,
+    duration: Math.floor(90 + Math.random() * 180),
+    unlocked: false,
+  };
+});
+
+// ─── Watermark SVG overlay ─────────────────────────────────────────────────
+function WatermarkOverlay() {
+  return (
+    <svg style={{
+      position:"absolute", inset:0, width:"100%", height:"100%",
+      pointerEvents:"none", zIndex:5, opacity:0.55
+    }} viewBox="0 0 400 300" preserveAspectRatio="xMidYMid meet">
+      {/* Diagonal watermark text */}
+      {[0,1,2,3].map(r => (
+        <text key={r}
+          x={r % 2 === 0 ? 40 : 80} y={60 + r * 70}
+          transform={`rotate(-28, ${r % 2 === 0 ? 40 : 80}, ${60 + r * 70})`}
+          fontFamily="DM Sans, sans-serif" fontSize="13" fontWeight="500"
+          fill="white" fillOpacity="0.65" letterSpacing="2"
+        >TZF 2026 PREVIEW</text>
+      ))}
+    </svg>
+  );
+}
+
+// ─── Video Card ───────────────────────────────────────────────────────────────
+function VideoCard({ video, inCart, onAddCart, onRemoveCart, onOpen, compact }) {
+  const [hovered, setHovered] = useState(false);
+  const [imgLoaded, setImgLoaded] = useState(false);
+  const hoverTimer = useRef(null);
+
+  const handleEnter = () => {
+    hoverTimer.current = setTimeout(() => setHovered(true), 200);
+  };
+  const handleLeave = () => {
+    clearTimeout(hoverTimer.current);
+    setHovered(false);
+  };
+
+  const thumbUrl = getMuxThumb(video.muxId, 2);
+  const gifUrl = getMuxGif(video.muxId);
+
+  const h = compact ? 140 : 200;
+
+  return (
+    <div
+      onClick={() => onOpen(video)}
+      onMouseEnter={handleEnter}
+      onMouseLeave={handleLeave}
+      style={{
+        position: "relative",
+        background: "var(--surface)",
+        borderRadius: 8,
+        overflow: "hidden",
+        cursor: "pointer",
+        border: `1px solid ${inCart ? "rgba(255,178,80,0.5)" : "var(--border)"}`,
+        transition: "border-color 0.2s, transform 0.2s, box-shadow 0.2s",
+        transform: hovered ? "translateY(-2px)" : "none",
+        boxShadow: hovered ? "0 12px 40px rgba(0,0,0,0.6)" : "none",
+      }}
+    >
+      {/* Thumbnail */}
+      <div style={{ position:"relative", width:"100%", height: h, background:"#0d0d10", overflow:"hidden" }}>
+        {/* Base thumbnail */}
+        <img
+          src={thumbUrl}
+          alt={video.title}
+          onLoad={() => setImgLoaded(true)}
+          style={{
+            width:"100%", height:"100%", objectFit:"cover",
+            opacity: imgLoaded ? 1 : 0,
+            transition: "opacity 0.3s",
+            position: "absolute", inset: 0,
+          }}
+        />
+        {/* Hover animated GIF (Mux animated preview) */}
+        {hovered && (
+          <img
+            src={gifUrl}
+            alt=""
+            style={{
+              position:"absolute", inset:0, width:"100%", height:"100%",
+              objectFit:"cover",
+            }}
+          />
+        )}
+        {/* Watermark */}
+        {!video.unlocked && <WatermarkOverlay />}
+        {/* Locked badge */}
+        {!video.unlocked && (
+          <div style={{
+            position:"absolute", top:8, right:8,
+            background:"rgba(0,0,0,0.65)", backdropFilter:"blur(8px)",
+            borderRadius:4, padding:"2px 7px",
+            fontSize:10, fontWeight:600, letterSpacing:1,
+            color:"rgba(255,255,255,0.7)",
+            border:"1px solid rgba(255,255,255,0.12)",
+            zIndex:10,
+          }}>PREVIEW</div>
+        )}
+        {video.unlocked && (
+          <div style={{
+            position:"absolute", top:8, right:8,
+            background:"oklch(72% 0.18 135 / 0.85)",
+            borderRadius:4, padding:"2px 7px",
+            fontSize:10, fontWeight:600, letterSpacing:1,
+            color:"white", zIndex:10,
+          }}>UNLOCKED</div>
+        )}
+        {/* Play icon on hover */}
+        {hovered && (
+          <div style={{
+            position:"absolute", inset:0, display:"flex",
+            alignItems:"center", justifyContent:"center", zIndex:8,
+            background:"rgba(0,0,0,0.2)"
+          }}>
+            <div style={{
+              width:40, height:40, borderRadius:"50%",
+              background:"rgba(255,255,255,0.18)", backdropFilter:"blur(8px)",
+              display:"flex", alignItems:"center", justifyContent:"center",
+              border:"1px solid rgba(255,255,255,0.3)",
+            }}>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="white">
+                <path d="M4 2.5l10 5.5-10 5.5V2.5z"/>
+              </svg>
+            </div>
+          </div>
+        )}
+        {/* Duration */}
+        <div style={{
+          position:"absolute", bottom:8, left:8, zIndex:10,
+          background:"rgba(0,0,0,0.6)", backdropFilter:"blur(4px)",
+          borderRadius:3, padding:"1px 5px",
+          fontSize:10, color:"rgba(255,255,255,0.8)", fontWeight:500,
+        }}>
+          {Math.floor(video.duration/60)}:{String(video.duration%60).padStart(2,"0")}
+        </div>
+        {/* In-cart indicator */}
+        {inCart && (
+          <div style={{
+            position:"absolute", bottom:8, right:8, zIndex:10,
+            background:"var(--gold)", borderRadius:"50%",
+            width:20, height:20, display:"flex", alignItems:"center", justifyContent:"center",
+          }}>
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="white">
+              <path d="M1.5 5l2.5 2.5 4.5-4.5" stroke="white" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
+            </svg>
+          </div>
+        )}
+      </div>
+
+      {/* Info */}
+      <div style={{ padding: compact ? "8px 10px" : "10px 12px" }}>
+        <div style={{
+          fontSize: compact ? 11 : 12, color:"var(--text-muted)",
+          marginBottom:3, display:"flex", gap:6, alignItems:"center"
+        }}>
+          <span style={{
+            background:"var(--surface2)", borderRadius:3,
+            padding:"1px 5px", fontSize:10, fontWeight:500, letterSpacing:0.5,
+            color:"var(--text-dim)",
+          }}>{video.day}</span>
+          <span style={{ color:"var(--text-dim)" }}>·</span>
+          <span style={{ color:"var(--text-dim)", fontSize:10 }}>{video.category}</span>
+        </div>
+        <div style={{
+          fontSize: compact ? 12 : 13, fontWeight:500,
+          color:"var(--text)", lineHeight:1.3,
+          whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis",
+        }}>{video.code}</div>
+        <div style={{
+          marginTop:8, display:"flex", alignItems:"center", justifyContent:"space-between",
+        }}>
+          <span style={{ fontSize:13, fontWeight:600, color:"var(--gold)" }}>US$10</span>
+          {!video.unlocked && (
+            <button
+              onClick={e => { e.stopPropagation(); inCart ? onRemoveCart(video.id) : onAddCart(video.id); }}
+              style={{
+                background: inCart ? "rgba(255,178,80,0.15)" : "rgba(255,255,255,0.07)",
+                border: `1px solid ${inCart ? "rgba(255,178,80,0.4)" : "var(--border)"}`,
+                color: inCart ? "var(--gold)" : "var(--text-muted)",
+                borderRadius:5, padding:"4px 10px",
+                fontSize:11, fontWeight:600, cursor:"pointer",
+                transition:"all 0.15s",
+                letterSpacing:0.5,
+              }}
+            >{inCart ? "✓ 已加入" : "+ 加入"}</button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Video Modal ───────────────────────────────────────────────────────────────
+function VideoModal({ video, inCart, onAddCart, onRemoveCart, onClose, onUnlock }) {
+  const videoRef = useRef(null);
+  const [unlocking, setUnlocking] = useState(false);
+  const [code, setCode] = useState("");
+  const [codeError, setCodeError] = useState("");
+
+  useEffect(() => {
+    const handler = e => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose]);
+
+  // Use Mux animated GIF as fallback preview (no HLS player needed for demo)
+  const gifUrl = getMuxGif(video.muxId);
+  const thumbUrl = getMuxThumb(video.muxId, 5);
+
+  const handleUnlock = () => {
+    if (code === "TZF2026") {
+      onUnlock(video.id);
+      setUnlocking(false);
+    } else {
+      setCodeError("取片碼錯誤，請確認後再試");
+    }
+  };
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          background:"var(--surface)", borderRadius:12,
+          border:"1px solid var(--border)",
+          width:"min(780px, 96vw)", maxHeight:"92vh",
+          overflow:"auto", animation:"slideUp 0.25s ease",
+          position:"relative",
+        }}
+      >
+        {/* Close */}
+        <button onClick={onClose} style={{
+          position:"absolute", top:14, right:14, zIndex:20,
+          background:"rgba(255,255,255,0.08)", border:"1px solid var(--border)",
+          borderRadius:"50%", width:32, height:32,
+          color:"var(--text-muted)", cursor:"pointer", fontSize:16,
+          display:"flex", alignItems:"center", justifyContent:"center",
+        }}>×</button>
+
+        {/* Video area */}
+        <div style={{
+          position:"relative", width:"100%", paddingBottom:"56.25%",
+          background:"#000", borderRadius:"12px 12px 0 0", overflow:"hidden",
+        }}>
+          {video.unlocked ? (
+            <div style={{
+              position:"absolute", inset:0, display:"flex",
+              alignItems:"center", justifyContent:"center",
+              background:"#000",
+            }}>
+              {/* In real use, embed Mux player or HLS here */}
+              <img src={thumbUrl} alt="" style={{width:"100%",height:"100%",objectFit:"cover",opacity:0.6}}/>
+              <div style={{position:"absolute",textAlign:"center"}}>
+                <div style={{fontSize:48,marginBottom:8}}>🔓</div>
+                <div style={{color:"white",fontWeight:600,fontSize:16}}>高清無浮水印版</div>
+                <div style={{color:"rgba(255,255,255,0.5)",fontSize:12,marginTop:4}}>已解鎖 · 限時 30 天觀看</div>
+              </div>
+            </div>
+          ) : (
+            <>
+              <img
+                src={gifUrl}
+                alt={video.title}
+                style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover"}}
+              />
+              <WatermarkOverlay />
+              <div style={{
+                position:"absolute", inset:0,
+                background:"linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 50%)",
+              }}/>
+              <div style={{
+                position:"absolute", bottom:16, left:16,
+                background:"rgba(0,0,0,0.65)", backdropFilter:"blur(8px)",
+                borderRadius:6, padding:"4px 10px",
+                fontSize:11, color:"rgba(255,255,255,0.7)", fontWeight:500,
+              }}>PREVIEW — 浮水印版</div>
+            </>
+          )}
+        </div>
+
+        {/* Info */}
+        <div style={{ padding:"24px 28px 28px" }}>
+          <div style={{ display:"flex", gap:6, marginBottom:10 }}>
+            <span style={{
+              background:"var(--surface2)", borderRadius:4, padding:"2px 8px",
+              fontSize:11, fontWeight:600, letterSpacing:0.5, color:"var(--text-muted)",
+            }}>{video.day}</span>
+            <span style={{
+              background:"var(--surface2)", borderRadius:4, padding:"2px 8px",
+              fontSize:11, fontWeight:600, letterSpacing:0.5, color:"var(--text-muted)",
+            }}>{video.category}</span>
+          </div>
+          <h2 style={{
+            fontFamily:"var(--font-display)", fontSize:26,
+            fontWeight:400, color:"var(--text)", marginBottom:6,
+          }}>{video.title}</h2>
+          <p style={{ fontSize:13, color:"var(--text-muted)", marginBottom:24 }}>
+            Taiwan Zouk Festival 2026 · Syntrend 12F, Taipei · Flow Theory Visuals
+          </p>
+
+          {!video.unlocked ? (
+            <>
+              {/* Purchase options */}
+              <div style={{ display:"flex", gap:10, marginBottom:20, flexWrap:"wrap" }}>
+                <div style={{
+                  flex:1, minWidth:200,
+                  background:"var(--surface2)", borderRadius:10,
+                  padding:"16px 18px", border:"1px solid var(--border)",
+                }}>
+                  <div style={{fontSize:12,color:"var(--text-muted)",marginBottom:4}}>單支購買</div>
+                  <div style={{fontSize:28,fontWeight:700,color:"var(--gold)",fontFamily:"var(--font-display)"}}>US$10</div>
+                  <div style={{fontSize:11,color:"var(--text-dim)",marginTop:4}}>含高清無浮水印版 · 30天觀看</div>
+                </div>
+                <div style={{
+                  flex:1, minWidth:200,
+                  background:"rgba(255,178,80,0.06)", borderRadius:10,
+                  padding:"16px 18px",
+                  border:"1px solid rgba(255,178,80,0.2)",
+                }}>
+                  <div style={{fontSize:12,color:"var(--gold)",marginBottom:4}}>整包購買 <span style={{background:"var(--gold)",color:"#000",borderRadius:3,padding:"1px 5px",fontSize:9,fontWeight:700,marginLeft:4}}>推薦</span></div>
+                  <div style={{fontSize:28,fontWeight:700,color:"var(--gold)",fontFamily:"var(--font-display)"}}>US$200</div>
+                  <div style={{fontSize:11,color:"var(--text-dim)",marginTop:4}}>全部 90 支 · 每支 US$2.22</div>
+                </div>
+              </div>
+
+              <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
+                <button
+                  onClick={() => { onAddCart(video.id); }}
+                  style={{
+                    flex:1, padding:"13px 20px",
+                    background: "var(--gold)",
+                    border:"none", borderRadius:8,
+                    color:"#1a1200", fontSize:14, fontWeight:700,
+                    cursor:"pointer", letterSpacing:0.3,
+                    transition:"opacity 0.15s",
+                  }}
+                >{inCart ? "✓ 已加入購物車" : "加入購物車"}</button>
+                <button
+                  onClick={() => setUnlocking(v => !v)}
+                  style={{
+                    padding:"13px 20px",
+                    background:"transparent",
+                    border:"1px solid var(--border)",
+                    borderRadius:8, color:"var(--text-muted)",
+                    fontSize:14, fontWeight:500, cursor:"pointer",
+                  }}
+                >輸入取片碼</button>
+              </div>
+
+              {/* Unlock code input */}
+              {unlocking && (
+                <div style={{
+                  marginTop:14, padding:16, background:"var(--surface2)",
+                  borderRadius:8, border:"1px solid var(--border)",
+                  animation:"slideUp 0.2s ease",
+                }}>
+                  <div style={{fontSize:12,color:"var(--text-muted)",marginBottom:8}}>已付款？輸入取片碼解鎖影片</div>
+                  <div style={{display:"flex",gap:8}}>
+                    <input
+                      value={code}
+                      onChange={e => { setCode(e.target.value); setCodeError(""); }}
+                      placeholder="取片碼 (例: TZF2026)"
+                      style={{
+                        flex:1, padding:"9px 12px",
+                        background:"var(--bg)", border:"1px solid var(--border)",
+                        borderRadius:6, color:"var(--text)", fontSize:13,
+                        outline:"none",
+                      }}
+                    />
+                    <button onClick={handleUnlock} style={{
+                      padding:"9px 16px",
+                      background:"oklch(72% 0.18 135)", border:"none",
+                      borderRadius:6, color:"white",
+                      fontSize:13, fontWeight:600, cursor:"pointer",
+                    }}>解鎖</button>
+                  </div>
+                  {codeError && <div style={{marginTop:6,fontSize:11,color:"oklch(65% 0.2 25)"}}>{codeError}</div>}
+                  <div style={{marginTop:6,fontSize:10,color:"var(--text-dim)"}}>Demo 取片碼：TZF2026</div>
+                </div>
+              )}
+            </>
+          ) : (
+            <div style={{
+              display:"flex", alignItems:"center", gap:12,
+              padding:16, background:"rgba(100,200,100,0.08)",
+              borderRadius:8, border:"1px solid rgba(100,200,100,0.2)",
+            }}>
+              <span style={{fontSize:24}}>🎬</span>
+              <div>
+                <div style={{fontWeight:600,color:"oklch(72% 0.18 135)",marginBottom:2}}>影片已解鎖</div>
+                <div style={{fontSize:12,color:"var(--text-muted)"}}>高清無浮水印版 · 有效期至 2026/06/03</div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Cart Sidebar ─────────────────────────────────────────────────────────────
+function CartSidebar({ cart, videos, onRemove, onClose, onCheckout }) {
+  const cartVideos = videos.filter(v => cart.includes(v.id));
+  const total = cartVideos.length * 10;
+
+  return (
+    <div style={{
+      position:"fixed", top:0, right:0, bottom:0, zIndex:150,
+      width:"min(380px, 96vw)",
+      background:"var(--surface)",
+      borderLeft:"1px solid var(--border)",
+      display:"flex", flexDirection:"column",
+      animation:"slideUp 0.25s ease",
+      boxShadow:"-20px 0 60px rgba(0,0,0,0.5)",
+    }}>
+      <div style={{
+        padding:"20px 24px 16px", borderBottom:"1px solid var(--border)",
+        display:"flex", alignItems:"center", justifyContent:"space-between",
+      }}>
+        <div>
+          <div style={{fontSize:16,fontWeight:600,color:"var(--text)"}}>購物車</div>
+          <div style={{fontSize:12,color:"var(--text-muted)",marginTop:2}}>{cart.length} 支影片</div>
+        </div>
+        <button onClick={onClose} style={{
+          background:"rgba(255,255,255,0.06)", border:"1px solid var(--border)",
+          borderRadius:"50%", width:32, height:32,
+          color:"var(--text-muted)", cursor:"pointer", fontSize:16,
+          display:"flex", alignItems:"center", justifyContent:"center",
+        }}>×</button>
+      </div>
+
+      <div style={{flex:1, overflow:"auto", padding:"12px 16px", display:"flex", flexDirection:"column", gap:8}}>
+        {cartVideos.length === 0 ? (
+          <div style={{textAlign:"center",padding:"60px 0",color:"var(--text-dim)"}}>
+            <div style={{fontSize:32,marginBottom:8}}>🛒</div>
+            <div style={{fontSize:13}}>購物車是空的</div>
+          </div>
+        ) : cartVideos.map(v => (
+          <div key={v.id} style={{
+            display:"flex", gap:10, alignItems:"center",
+            padding:"8px 10px", background:"var(--surface2)",
+            borderRadius:7, border:"1px solid var(--border)",
+          }}>
+            <img
+              src={getMuxThumb(v.muxId)}
+              alt=""
+              style={{width:56,height:42,objectFit:"cover",borderRadius:4,flexShrink:0}}
+            />
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:12,fontWeight:600,color:"var(--text)",
+                whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{v.code}</div>
+              <div style={{fontSize:10,color:"var(--text-dim)",marginTop:2}}>{v.day} · {v.category}</div>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4,flexShrink:0}}>
+              <span style={{fontSize:12,fontWeight:700,color:"var(--gold)"}}>$10</span>
+              <button onClick={() => onRemove(v.id)} style={{
+                background:"none", border:"none", color:"var(--text-dim)",
+                cursor:"pointer", fontSize:11, padding:0,
+              }}>移除</button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {cart.length > 0 && (
+        <div style={{padding:"16px 20px", borderTop:"1px solid var(--border)"}}>
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:16}}>
+            <span style={{fontSize:13,color:"var(--text-muted)"}}>小計</span>
+            <span style={{fontSize:20,fontWeight:700,color:"var(--gold)",fontFamily:"var(--font-display)"}}>US${total}</span>
+          </div>
+          <button onClick={onCheckout} style={{
+            width:"100%", padding:"14px",
+            background:"var(--gold)", border:"none", borderRadius:8,
+            color:"#1a1200", fontSize:15, fontWeight:700, cursor:"pointer",
+            letterSpacing:0.3, marginBottom:10,
+          }}>前往結帳</button>
+          <div style={{
+            display:"flex",gap:6,justifyContent:"center",
+            flexWrap:"wrap",
+          }}>
+            {["💳 信用卡","🏦 銀行轉帳","💚 LINE Pay"].map(m => (
+              <span key={m} style={{
+                fontSize:10, color:"var(--text-dim)",
+                background:"var(--surface2)", padding:"2px 7px",
+                borderRadius:4, border:"1px solid var(--border)",
+              }}>{m}</span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Main App ─────────────────────────────────────────────────────────────────
+function App() {
+  const { useTweaks, TweaksPanel, TweakSection, TweakToggle, TweakRadio, TweakSlider, TweakColor } = window;
+
+  const [tweaks, setTweak] = useTweaks(/*EDITMODE-BEGIN*/{
+    "gridCols": "4",
+    "showUnlocked": false,
+    "accentColor": "#c8882a",
+    "compactCards": false
+  }/*EDITMODE-END*/);
+
+  const [search, setSearch] = useState("");
+  const [activeCategory, setActiveCategory] = useState("全部");
+  const [activeDay, setActiveDay] = useState("全部日期");
+  const [cart, setCart] = useState([]);
+  const [cartOpen, setCartOpen] = useState(false);
+  const [selectedVideo, setSelectedVideo] = useState(null);
+  const [videos, setVideos] = useState(VIDEOS);
+  const [sortBy, setSortBy] = useState("default");
+  const [checkoutDone, setCheckoutDone] = useState(false);
+
+  const colMap = { "3": 3, "4": 4, "5": 5, "6": 6 };
+  const cols = colMap[tweaks.gridCols] || 4;
+
+  const filtered = useMemo(() => {
+    let v = videos;
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      v = v.filter(x => x.code.toLowerCase().includes(q) || x.title.toLowerCase().includes(q) || x.category.toLowerCase().includes(q));
+    }
+    if (activeCategory !== "全部") v = v.filter(x => x.category === activeCategory);
+    if (activeDay !== "全部日期") v = v.filter(x => x.day === activeDay);
+    if (tweaks.showUnlocked) v = v.filter(x => x.unlocked);
+    if (sortBy === "price-asc") v = [...v].sort((a,b) => a.price - b.price);
+    if (sortBy === "code") v = [...v].sort((a,b) => a.code.localeCompare(b.code));
+    return v;
+  }, [search, activeCategory, activeDay, tweaks.showUnlocked, sortBy, videos]);
+
+  const addCart = id => setCart(c => c.includes(id) ? c : [...c, id]);
+  const removeCart = id => setCart(c => c.filter(x => x !== id));
+  const unlockVideo = id => setVideos(vs => vs.map(v => v.id === id ? {...v, unlocked:true} : v));
+  const buyAll = () => {
+    setVideos(vs => vs.map(v => ({...v, unlocked:true})));
+    setCheckoutDone(true);
+  };
+
+  return (
+    <div style={{
+      minHeight:"100vh", background:"var(--bg)",
+      fontFamily:"var(--font-body)",
+    }}>
+
+      {/* ── Header ── */}
+      <header style={{
+        position:"sticky", top:0, zIndex:100,
+        background:"rgba(10,10,11,0.85)", backdropFilter:"blur(20px)",
+        borderBottom:"1px solid var(--border)",
+      }}>
+        <div style={{
+          maxWidth:1600, margin:"0 auto",
+          padding:"0 28px",
+          height:60, display:"flex", alignItems:"center", gap:20,
+        }}>
+          {/* Logo / Title */}
+          <div style={{display:"flex", alignItems:"baseline", gap:8, flexShrink:0}}>
+            <span style={{
+              fontFamily:"var(--font-display)", fontSize:18, fontWeight:400,
+              color:"var(--text)", letterSpacing:"-0.02em",
+            }}>Taiwan Zouk Festival</span>
+            <span style={{
+              fontSize:11, color:"var(--gold)", fontWeight:600,
+              letterSpacing:1, borderLeft:"1px solid var(--border)", paddingLeft:8,
+            }}>2026</span>
+          </div>
+
+          {/* Search */}
+          <div style={{
+            flex:1, maxWidth:400, position:"relative",
+          }}>
+            <svg style={{
+              position:"absolute", left:10, top:"50%", transform:"translateY(-50%)",
+              opacity:0.35, pointerEvents:"none",
+            }} width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <circle cx="6" cy="6" r="4.5" stroke="white" strokeWidth="1.5"/>
+              <path d="M9.5 9.5L12 12" stroke="white" strokeWidth="1.5" strokeLinecap="round"/>
+            </svg>
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="搜尋影片編號、類別…"
+              style={{
+                width:"100%", padding:"8px 12px 8px 32px",
+                background:"rgba(255,255,255,0.06)",
+                border:"1px solid var(--border)", borderRadius:7,
+                color:"var(--text)", fontSize:13, outline:"none",
+                fontFamily:"var(--font-body)",
+              }}
+            />
+          </div>
+
+          <div style={{flex:1}}/>
+
+          {/* Contact */}
+          <a
+            href="https://www.instagram.com/jimframe/"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display:"flex", alignItems:"center", gap:7,
+              background:"rgba(255,255,255,0.035)",
+              border:"1px solid var(--border)", borderRadius:7,
+              padding:"8px 12px", color:"var(--text-muted)",
+              fontSize:13, fontWeight:600, textDecoration:"none",
+            }}
+          >
+            <span style={{color:"var(--gold)"}}>@jimframe</span>
+          </a>
+
+          {/* Cart button */}
+          <button
+            onClick={() => setCartOpen(v => !v)}
+            style={{
+              display:"flex", alignItems:"center", gap:8,
+              background:"rgba(255,255,255,0.06)",
+              border:"1px solid var(--border)", borderRadius:7,
+              padding:"8px 14px", cursor:"pointer",
+              color:"var(--text)", fontSize:13, fontWeight:500,
+              position:"relative",
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M1 1h2.5l1.5 8h7l1.5-5H4.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+              <circle cx="7" cy="13" r="1" fill="currentColor"/>
+              <circle cx="11" cy="13" r="1" fill="currentColor"/>
+            </svg>
+            <span>購物車</span>
+            {cart.length > 0 && (
+              <span style={{
+                background:"var(--gold)", color:"#1a1200",
+                borderRadius:"50%", width:18, height:18,
+                display:"flex", alignItems:"center", justifyContent:"center",
+                fontSize:10, fontWeight:700, flexShrink:0,
+              }}>{cart.length}</span>
+            )}
+          </button>
+        </div>
+      </header>
+
+      {/* ── Hero ── */}
+      <div style={{
+        maxWidth:1600, margin:"0 auto", padding:"40px 28px 0",
+      }}>
+        <div style={{
+          padding:"40px 48px", borderRadius:12,
+          background:"linear-gradient(135deg, rgba(200,136,42,0.08) 0%, rgba(255,255,255,0.02) 60%)",
+          border:"1px solid var(--border)",
+          position:"relative", overflow:"hidden", marginBottom:32,
+        }}>
+          {/* Decorative lines */}
+          <svg style={{position:"absolute",right:0,top:0,opacity:0.04,pointerEvents:"none"}} width="400" height="200" viewBox="0 0 400 200">
+            {[0,1,2,3,4,5,6,7].map(i => (
+              <line key={i} x1={i*50} y1="0" x2={i*50+200} y2="200" stroke="white" strokeWidth="1"/>
+            ))}
+          </svg>
+          <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",flexWrap:"wrap",gap:16}}>
+            <div>
+              <div style={{
+                fontSize:11, fontWeight:600, letterSpacing:2,
+                color:"var(--gold)", textTransform:"uppercase", marginBottom:10,
+              }}>Flow Theory Visuals · 官方影片庫</div>
+              <h1 style={{
+                fontFamily:"var(--font-display)", fontSize:"clamp(28px,4vw,52px)",
+                fontWeight:400, lineHeight:1.1, color:"var(--text)",
+                marginBottom:10, letterSpacing:"-0.02em",
+              }}>Taiwan Zouk Festival<br/><em>2026</em></h1>
+              <p style={{fontSize:14,color:"var(--text-muted)",maxWidth:480}}>
+                May 1–3, 2026 · Syntrend 12F, Taipei · {videos.length} 支舞蹈影片
+                · 預覽版含浮水印，購買後取得高清無浮水印版
+              </p>
+              <a
+                href="https://www.instagram.com/jimframe/"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display:"inline-flex", alignItems:"center", gap:8,
+                  marginTop:14, padding:"8px 12px",
+                  border:"1px solid rgba(200,136,42,0.25)",
+                  borderRadius:7, background:"rgba(200,136,42,0.12)",
+                  color:"var(--gold)", fontSize:12, fontWeight:700,
+                  textDecoration:"none", letterSpacing:0.2,
+                }}
+              >
+                聯絡 @jimframe
+              </a>
+            </div>
+            <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
+              <div style={{
+                padding:"12px 20px", background:"rgba(200,136,42,0.12)",
+                border:"1px solid rgba(200,136,42,0.25)", borderRadius:8,
+                textAlign:"center",
+              }}>
+                <div style={{fontSize:26,fontWeight:700,color:"var(--gold)",fontFamily:"var(--font-display)"}}>90</div>
+                <div style={{fontSize:11,color:"var(--text-muted)"}}>支影片</div>
+              </div>
+              <div style={{
+                padding:"12px 20px", background:"rgba(255,255,255,0.03)",
+                border:"1px solid var(--border)", borderRadius:8,
+                textAlign:"center",
+              }}>
+                <div style={{fontSize:26,fontWeight:700,color:"var(--text)",fontFamily:"var(--font-display)"}}>US$10</div>
+                <div style={{fontSize:11,color:"var(--text-muted)"}}>單支價格</div>
+              </div>
+              <button onClick={buyAll} style={{
+                padding:"12px 24px",
+                background:"var(--gold)", border:"none", borderRadius:8,
+                color:"#1a1200", fontSize:13, fontWeight:700, cursor:"pointer",
+                letterSpacing:0.3,
+              }}>整包 US$200</button>
+            </div>
+          </div>
+        </div>
+
+        {/* Checkout success */}
+        {checkoutDone && (
+          <div style={{
+            marginBottom:24, padding:"14px 20px",
+            background:"rgba(100,200,100,0.08)", borderRadius:8,
+            border:"1px solid rgba(100,200,100,0.2)",
+            display:"flex", alignItems:"center", gap:12,
+            animation:"slideUp 0.25s ease",
+          }}>
+            <span style={{fontSize:20}}>🎉</span>
+            <div>
+              <span style={{fontWeight:600,color:"oklch(72% 0.18 135)"}}>購買成功！</span>
+              <span style={{fontSize:13,color:"var(--text-muted)",marginLeft:8}}>所有影片已解鎖，歡迎盡情瀏覽。</span>
+            </div>
+          </div>
+        )}
+
+        {/* ── Filters ── */}
+        <div style={{
+          display:"flex", gap:10, alignItems:"center",
+          flexWrap:"wrap", marginBottom:20,
+        }}>
+          {/* Category pills */}
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            {CATEGORIES.map(cat => (
+              <button key={cat} onClick={() => setActiveCategory(cat)} style={{
+                padding:"6px 14px", borderRadius:20,
+                background: activeCategory === cat ? "var(--gold)" : "rgba(255,255,255,0.05)",
+                border: activeCategory === cat ? "1px solid var(--gold)" : "1px solid var(--border)",
+                color: activeCategory === cat ? "#1a1200" : "var(--text-muted)",
+                fontSize:12, fontWeight: activeCategory === cat ? 700 : 400,
+                cursor:"pointer", transition:"all 0.15s",
+              }}>{cat}</button>
+            ))}
+          </div>
+          <div style={{width:1,height:24,background:"var(--border)"}}/>
+          {/* Day filter */}
+          <div style={{display:"flex",gap:6}}>
+            {DAYS.map(d => (
+              <button key={d} onClick={() => setActiveDay(d)} style={{
+                padding:"6px 12px", borderRadius:20,
+                background: activeDay === d ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.04)",
+                border: activeDay === d ? "1px solid rgba(255,255,255,0.2)" : "1px solid var(--border)",
+                color: activeDay === d ? "var(--text)" : "var(--text-muted)",
+                fontSize:11, fontWeight: activeDay === d ? 600 : 400,
+                cursor:"pointer",
+              }}>{d}</button>
+            ))}
+          </div>
+          <div style={{flex:1}}/>
+          {/* Sort */}
+          <select
+            value={sortBy}
+            onChange={e => setSortBy(e.target.value)}
+            style={{
+              padding:"6px 10px", background:"var(--surface2)",
+              border:"1px solid var(--border)", borderRadius:6,
+              color:"var(--text-muted)", fontSize:12, cursor:"pointer",
+              outline:"none",
+            }}
+          >
+            <option value="default">預設排序</option>
+            <option value="code">依編號</option>
+          </select>
+          <span style={{fontSize:12,color:"var(--text-dim)"}}>{filtered.length} 支</span>
+        </div>
+
+        {/* ── Grid ── */}
+        <div style={{
+          display:"grid",
+          gridTemplateColumns:`repeat(${cols}, minmax(0, 1fr))`,
+          gap:tweaks.compactCards ? 10 : 16,
+          paddingBottom:80,
+        }}>
+          {filtered.map(video => (
+            <VideoCard
+              key={video.id}
+              video={video}
+              inCart={cart.includes(video.id)}
+              onAddCart={addCart}
+              onRemoveCart={removeCart}
+              onOpen={setSelectedVideo}
+              compact={tweaks.compactCards}
+            />
+          ))}
+        </div>
+
+        {filtered.length === 0 && (
+          <div style={{textAlign:"center",padding:"80px 0",color:"var(--text-dim)"}}>
+            <div style={{fontSize:36,marginBottom:12}}>🎬</div>
+            <div style={{fontSize:16}}>找不到符合的影片</div>
+          </div>
+        )}
+      </div>
+
+      {/* ── Cart sidebar ── */}
+      {cartOpen && (
+        <CartSidebar
+          cart={cart}
+          videos={videos}
+          onRemove={removeCart}
+          onClose={() => setCartOpen(false)}
+          onCheckout={() => { setCheckoutDone(true); setCart([]); setCartOpen(false); setVideos(vs => vs.map(v => ({...v, unlocked:true}))); }}
+        />
+      )}
+
+      {/* ── Video modal ── */}
+      {selectedVideo && (
+        <VideoModal
+          video={selectedVideo}
+          inCart={cart.includes(selectedVideo.id)}
+          onAddCart={addCart}
+          onRemoveCart={removeCart}
+          onClose={() => setSelectedVideo(null)}
+          onUnlock={id => { unlockVideo(id); setSelectedVideo(v => v ? {...v, unlocked:true} : v); }}
+        />
+      )}
+
+      {/* ── Tweaks Panel ── */}
+      <TweaksPanel>
+        <TweakSection label="格局">
+          <TweakRadio label="每列欄數" id="gridCols" options={["3","4","5","6"]} />
+          <TweakToggle label="緊湊模式" id="compactCards" />
+        </TweakSection>
+        <TweakSection label="篩選">
+          <TweakToggle label="只顯示已解鎖" id="showUnlocked" />
+        </TweakSection>
+        <TweakSection label="主題">
+          <TweakColor label="金色主題" id="accentColor" />
+        </TweakSection>
+      </TweaksPanel>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
