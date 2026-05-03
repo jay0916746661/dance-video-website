@@ -64,6 +64,12 @@ function gdThumb(fileId) {
 function gdEmbed(fileId) {
   return `https://drive.google.com/file/d/${fileId}/preview?autoplay=1`;
 }
+function gdView(fileId) {
+  return `https://drive.google.com/file/d/${fileId}/view`;
+}
+function gdDownload(fileId) {
+  return `https://drive.google.com/uc?export=download&id=${fileId}`;
+}
 
 // ─── Categories & Days ───────────────────────────────────────────────────────
 const CATEGORIES = ["All / 全部"];
@@ -496,6 +502,8 @@ function VideoModal({ video, inCart, onAddCart, onRemoveCart, onClose, onBuyNow 
   }, [onClose]);
 
   const embedUrl  = video.gdFileId ? gdEmbed(video.gdFileId) : null;
+  const viewUrl   = video.gdFileId ? gdView(video.gdFileId) : null;
+  const downloadUrl = video.gdFileId ? gdDownload(video.gdFileId) : null;
   const thumbUrl  = video.gdFileId ? gdThumb(video.gdFileId) : null;
   const localUrl  = video.localUrl || null;
 
@@ -528,7 +536,9 @@ function VideoModal({ video, inCart, onAddCart, onRemoveCart, onClose, onBuyNow 
           ) : embedUrl ? (
             <iframe src={embedUrl}
               style={{position:"absolute",inset:0,width:"100%",height:"100%",border:"none",background:"#000"}}
-              allow="autoplay"/>
+              allow="autoplay; fullscreen"
+              allowFullScreen
+              loading="eager"/>
           ) : thumbUrl ? (
             <img src={thumbUrl} alt={video.title}
               style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"contain",background:"#000"}}/>
@@ -569,6 +579,33 @@ function VideoModal({ video, inCart, onAddCart, onRemoveCart, onClose, onBuyNow 
             fontFamily:"var(--font-display)",fontSize:24,
             fontWeight:400,color:"var(--text)",marginBottom:6,lineHeight:1.2,
           }}>{video.title}</h2>
+
+          {viewUrl && (
+            <div style={{
+              background:"var(--surface2)",border:"1px solid var(--border)",
+              borderRadius:10,padding:14,margin:"16px 0",
+            }}>
+              <div style={{fontSize:12,color:"var(--text-muted)",lineHeight:1.5,marginBottom:12}}>
+                If the preview is still processing, open it in Google Drive or download the preview file.
+                <br/>
+                如果預覽還在處理中，可以直接開雲端硬碟或下載預覽檔觀看。
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10}}>
+                <a href={viewUrl} target="_blank" rel="noreferrer" style={{
+                  display:"flex",alignItems:"center",justifyContent:"center",
+                  minHeight:44,borderRadius:8,border:"1px solid rgba(255,255,255,0.18)",
+                  color:"var(--text)",fontWeight:800,fontSize:13,textDecoration:"none",
+                  background:"rgba(255,255,255,0.04)",textAlign:"center",padding:"0 10px",
+                }}>Open Drive · 雲端觀看</a>
+                <a href={downloadUrl} target="_blank" rel="noreferrer" style={{
+                  display:"flex",alignItems:"center",justifyContent:"center",
+                  minHeight:44,borderRadius:8,border:"1px solid rgba(200,160,60,0.35)",
+                  color:"var(--gold)",fontWeight:800,fontSize:13,textDecoration:"none",
+                  background:"rgba(200,160,60,0.08)",textAlign:"center",padding:"0 10px",
+                }}>Download · 下載觀看</a>
+              </div>
+            </div>
+          )}
 
           <>
               {/* Price card — single only */}
