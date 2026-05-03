@@ -631,6 +631,8 @@ function VideoModal({ video, inCart, onAddCart, onRemoveCart, onClose, onUnlock,
 function CartSidebar({ cart, videos, onRemove, onClose, onCheckout }) {
   const cartVids = videos.filter(v => cart.includes(v.id));
   const total = cartVids.length * 10;
+  const contactUrl = "https://www.instagram.com/jimframe/";
+  const paypalUrl = `https://paypal.me/jimframe/${total}`;
 
   return (
     <div style={{
@@ -708,14 +710,25 @@ function CartSidebar({ cart, videos, onRemove, onClose, onCheckout }) {
             <span style={{fontSize:12,color:"var(--text-muted)"}}>Total · 總計</span>
             <span style={{fontSize:22,fontWeight:700,color:"var(--gold)",fontFamily:"var(--font-display)"}}>US${total}</span>
           </div>
-          <button onClick={onCheckout} style={{
-            width:"100%",padding:"13px",
-            background:"var(--gold)",border:"none",borderRadius:8,
-            color:"#1a1100",fontSize:14,fontWeight:700,
-            cursor:"pointer",letterSpacing:0.3,marginBottom:10,
-          }}>Checkout · 前往結帳</button>
+          <div style={{display:"grid",gridTemplateColumns:"1fr",gap:8,marginBottom:10}}>
+            <a href={contactUrl} target="_blank" rel="noopener noreferrer" style={{
+              width:"100%",padding:"13px",
+              background:"var(--gold)",border:"none",borderRadius:8,
+              color:"#1a1100",fontSize:14,fontWeight:800,
+              textAlign:"center",textDecoration:"none",letterSpacing:0.3,
+            }}>Contact @jimframe · 直接聯絡我</a>
+            <a href={paypalUrl} target="_blank" rel="noopener noreferrer" style={{
+              width:"100%",padding:"12px",
+              background:"var(--surface2)",border:"1px solid rgba(200,160,60,0.35)",borderRadius:8,
+              color:"var(--gold)",fontSize:13,fontWeight:800,
+              textAlign:"center",textDecoration:"none",letterSpacing:0.3,
+            }}>PayPal US${total} · PayPal 付款</a>
+          </div>
+          <div style={{fontSize:10,color:"var(--text-dim)",textAlign:"center",lineHeight:1.5,marginBottom:10}}>
+            After payment, DM the selected video codes to @jimframe.
+          </div>
           <div style={{display:"flex",gap:5,justifyContent:"center",flexWrap:"wrap"}}>
-            {["💳 Credit Card","🏦 Bank Transfer","💚 LINE Pay"].map(m => (
+            {["Contact @jimframe","PayPal"].map(m => (
               <span key={m} style={{
                 fontSize:9,color:"var(--text-dim)",
                 background:"var(--surface2)",padding:"2px 7px",
@@ -731,46 +744,14 @@ function CartSidebar({ cart, videos, onRemove, onClose, onCheckout }) {
 
 // ─── Buy Now Modal ────────────────────────────────────────────────────────────
 function BuyNowModal({ video, onClose, onPaid }) {
-  const [step, setStep] = useState(1); // 1=info, 2=success
-  const [method, setMethod] = useState("linepay");
+  const contactUrl = "https://www.instagram.com/jimframe/";
+  const paypalUrl = "https://paypal.me/jimframe/10";
 
   useEffect(() => {
     const fn = e => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", fn);
     return () => window.removeEventListener("keydown", fn);
   }, [onClose]);
-
-  if (step === 2) return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div onClick={e=>e.stopPropagation()} style={{
-        background:"var(--surface)",borderRadius:14,
-        border:"1px solid var(--border)",width:"min(460px,95vw)",
-        padding:"48px 40px",textAlign:"center",
-        animation:"slideUp 0.22s ease",
-      }}>
-        <div style={{fontSize:52,marginBottom:16}}>🎉</div>
-        <h3 style={{fontFamily:"var(--font-display)",fontSize:24,fontWeight:400,marginBottom:8}}>
-          Payment Received · 付款成功
-        </h3>
-        <p style={{fontSize:13,color:"var(--text-muted)",marginBottom:24}}>
-          Your unlock code has been sent. Enter it on the video page to access the full HD version.<br/>
-          <span style={{color:"var(--text-dim)"}}>取片碼已發送，輸入後即可觀看高清版。</span>
-        </p>
-        <div style={{
-          padding:"12px 20px",background:"var(--surface2)",borderRadius:8,
-          border:"1px solid var(--border)",marginBottom:24,
-          fontFamily:"monospace",fontSize:18,letterSpacing:4,color:"var(--gold)",fontWeight:700,
-        }}>TZF2026</div>
-        <div style={{fontSize:10,color:"var(--text-dim)",marginBottom:20}}>
-          (Demo unlock code for this prototype)
-        </div>
-        <button onClick={() => { onPaid(video.id); onClose(); }} style={{
-          padding:"12px 32px",background:"var(--gold)",border:"none",
-          borderRadius:8,color:"#1a1100",fontSize:14,fontWeight:700,cursor:"pointer",
-        }}>Unlock Video · 解鎖影片</button>
-      </div>
-    </div>
-  );
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -805,40 +786,46 @@ function BuyNowModal({ video, onClose, onPaid }) {
           </div>
 
           <div style={{fontSize:12,color:"var(--text-muted)",marginBottom:10,fontWeight:600}}>
-            Payment method · 付款方式
+            Contact / PayPal · 直接聯絡或付款
           </div>
-          <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:20}}>
-            {[
-              {id:"linepay",label:"💚 LINE Pay"},
-              {id:"credit", label:"💳 Credit Card · 信用卡"},
-              {id:"bank",   label:"🏦 Bank Transfer · 銀行轉帳"},
-            ].map(m => (
-              <label key={m.id} style={{
-                display:"flex",alignItems:"center",gap:10,
-                padding:"10px 14px",borderRadius:8,cursor:"pointer",
-                background: method===m.id ? "var(--gold-bg)" : "var(--surface2)",
-                border:`1px solid ${method===m.id ? "rgba(200,160,60,0.35)" : "var(--border)"}`,
-                transition:"all 0.15s",
-              }}>
-                <input type="radio" name="method" value={m.id}
-                  checked={method===m.id} onChange={() => setMethod(m.id)}
-                  style={{accentColor:"var(--gold)"}}/>
-                <span style={{fontSize:13,fontWeight:method===m.id ? 600 : 400,
-                  color:method===m.id ? "var(--gold)" : "var(--text)"}}>
-                  {m.label}
-                </span>
-              </label>
-            ))}
+          <div style={{display:"grid",gridTemplateColumns:"1fr",gap:10,marginBottom:16}}>
+            <a
+              href={contactUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display:"flex",alignItems:"center",justifyContent:"center",gap:10,
+                padding:"13px",borderRadius:8,
+                background:"var(--gold)",border:"none",
+                color:"#1a1100",fontSize:14,fontWeight:800,
+                textDecoration:"none",letterSpacing:0.3,
+              }}
+            >
+              Direct Message @jimframe · 直接聯絡我
+            </a>
+            <a
+              href={paypalUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display:"flex",alignItems:"center",justifyContent:"center",gap:10,
+                padding:"13px",borderRadius:8,
+                background:"var(--surface2)",border:"1px solid rgba(200,160,60,0.35)",
+                color:"var(--gold)",fontSize:14,fontWeight:800,
+                textDecoration:"none",letterSpacing:0.3,
+              }}
+            >
+              PayPal US$10 · PayPal 付款
+            </a>
           </div>
 
-          <button onClick={() => setStep(2)} style={{
-            width:"100%",padding:"13px",
-            background:"var(--gold)",border:"none",borderRadius:8,
-            color:"#1a1100",fontSize:14,fontWeight:700,
-            cursor:"pointer",letterSpacing:0.3,
-          }}>Proceed to Pay · 確認付款</button>
-          <div style={{marginTop:10,fontSize:10,color:"var(--text-dim)",textAlign:"center"}}>
-            Secure payment · After payment you will receive an unlock code · 付款後取得取片碼
+          <div style={{
+            padding:"12px 14px",borderRadius:8,
+            background:"rgba(255,255,255,0.03)",border:"1px solid var(--border)",
+            fontSize:11,color:"var(--text-muted)",lineHeight:1.6,
+          }}>
+            After payment, please DM the video code <span style={{color:"var(--gold)",fontWeight:700}}>{video.code}</span> to @jimframe.<br/>
+            付款後請私訊影片編號 <span style={{color:"var(--gold)",fontWeight:700}}>{video.code}</span>，我會直接傳無浮水印版本給你。
           </div>
         </div>
       </div>
