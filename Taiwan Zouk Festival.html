@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Taiwan Zouk Festival 2026 — Video Library</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://drive.google.com">
+<link rel="preconnect" href="https://lh3.googleusercontent.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
@@ -304,13 +306,16 @@ function ThumbPlaceholder({ code, day }) {
 }
 
 // ─── Video Card ───────────────────────────────────────────────────────────────
-function VideoCard({ video, inCart, onAddCart, onRemoveCart, onOpen, compact }) {
+function VideoCard({ video, inCart, onAddCart, onRemoveCart, onOpen, onPrefetch, compact }) {
   const [hovered, setHovered] = useState(false);
   const timerRef = useRef(null);
 
   const h = compact ? 145 : 195;
 
-  const handleEnter = () => { timerRef.current = setTimeout(() => setHovered(true), 180); };
+  const handleEnter = () => {
+    onPrefetch?.(video);
+    timerRef.current = setTimeout(() => setHovered(true), 180);
+  };
   const handleLeave = () => { clearTimeout(timerRef.current); setHovered(false); };
 
   const hasThumb = !!video.gdFileId || !!video.localUrl;
@@ -573,9 +578,6 @@ function VideoModal({ video, inCart, onAddCart, onRemoveCart, onClose, onBuyNow 
             fontFamily:"var(--font-display)",fontSize:24,
             fontWeight:400,color:"var(--text)",marginBottom:6,lineHeight:1.2,
           }}>{video.title}</h2>
-          <p style={{fontSize:12,color:"var(--text-dim)",marginBottom:24}}>
-            Taiwan Zouk Festival 2026 · May 1–3, Taipei · Flow Theory Visuals
-          </p>
 
           <>
               {/* Price card — single only */}
@@ -861,6 +863,7 @@ function App() {
   const [cart, setCart]             = useState([]);
   const [cartOpen, setCartOpen]     = useState(false);
   const [selectedVideo, setSelectedVideo] = useState(null);
+  const [prefetchedDriveId, setPrefetchedDriveId] = useState(null);
   const [buyVideo, setBuyVideo]     = useState(null);
   const [sortBy, setSortBy]         = useState("default");
 
@@ -884,6 +887,9 @@ function App() {
 
   const addCart    = id => setCart(c => c.includes(id) ? c : [...c, id]);
   const removeCart = id => setCart(c => c.filter(x => x !== id));
+  const prefetchVideo = video => {
+    if (video?.gdFileId) setPrefetchedDriveId(current => current === video.gdFileId ? current : video.gdFileId);
+  };
   return (
     <div style={{minHeight:"100vh",background:"var(--bg)",fontFamily:"var(--font-body)"}}>
 
@@ -1009,7 +1015,6 @@ function App() {
                 letterSpacing:"-0.02em",
               }}>Taiwan Zouk Festival<br/><em>2026</em></h1>
               <p style={{fontSize:13,color:"var(--text-muted)",maxWidth:460,lineHeight:1.6}}>
-                May 1–3, 2026 · Syntrend 12F, Taipei<br/>
                 {videos.length} cloud videos loaded from Google Drive · Watermark preview · Message @jimframe after payment
               </p>
               <a
@@ -1104,6 +1109,7 @@ function App() {
                 inCart={cart.includes(v.id)}
                 onAddCart={addCart} onRemoveCart={removeCart}
                 onOpen={setSelectedVideo}
+                onPrefetch={prefetchVideo}
                 compact={tweaks.compactCards}
               />
             ))}
@@ -1129,6 +1135,24 @@ function App() {
           onAddCart={addCart} onRemoveCart={removeCart}
           onClose={()=>setSelectedVideo(null)}
           onBuyNow={v=>{setSelectedVideo(null); setBuyVideo(v);}}
+        />
+      )}
+      {prefetchedDriveId && (
+        <iframe
+          src={gdEmbed(prefetchedDriveId)}
+          title="Drive preview prefetch"
+          aria-hidden="true"
+          tabIndex="-1"
+          style={{
+            position:"fixed",
+            width:1,
+            height:1,
+            opacity:0,
+            pointerEvents:"none",
+            left:-9999,
+            bottom:-9999,
+            border:"none",
+          }}
         />
       )}
       {buyVideo && (
