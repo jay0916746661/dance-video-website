@@ -185,6 +185,25 @@ async function fetchDriveFeed() {
 
 const STATIC_CLOUD_VIDEOS = mapDriveFilesToVideos(DRIVE_FILES);
 
+// ─── Local preview manifest ───────────────────────────────────────────────────
+async function fetchManifest() {
+  try {
+    const res = await fetch("public/previews/manifest.json", { cache: "no-store" });
+    if (!res.ok) return {};
+    const entries = await res.json();
+    const map = {};
+    entries.forEach(e => { map[e.name] = { previewUrl: e.preview, thumbUrl: e.thumb }; });
+    return map;
+  } catch { return {}; }
+}
+
+function enrichVideos(videos, previewMap) {
+  return videos.map(v => {
+    const m = previewMap[v.fileName];
+    return m ? { ...v, localUrl: m.previewUrl, thumbUrl: m.thumbUrl } : v;
+  });
+}
+
 // ─── Upload Zone ─────────────────────────────────────────────────────────────
 function UploadZone({ onFilesAdded }) {
   const [dragging, setDragging] = useState(false);
@@ -315,9 +334,8 @@ function VideoCard({ video, inCart, onAddCart, onRemoveCart, onOpen, onPrefetch,
   };
   const handleLeave = () => { clearTimeout(timerRef.current); setHovered(false); };
 
-  const hasThumb = !!video.gdFileId || !!video.localUrl;
-  const thumbUrl = video.gdFileId ? gdThumb(video.gdFileId) : null;
-  const localUrl = video.localUrl || null;
+  const previewUrl = video.localUrl || null;
+  const thumbUrl = video.thumbUrl || (video.gdFileId ? gdThumb(video.gdFileId) : null);
 
   return (
     <div
@@ -336,14 +354,13 @@ function VideoCard({ video, inCart, onAddCart, onRemoveCart, onOpen, onPrefetch,
       {/* ── Thumbnail area ── */}
       <div style={{position:"relative",width:"100%",height:h,overflow:"hidden",background:"#0c0c10"}}>
 
-        {localUrl ? (
+        {hovered && previewUrl ? (
           <video
-            src={localUrl}
+            src={previewUrl}
+            autoPlay
             muted
             playsInline
-            preload="metadata"
-            onMouseEnter={e => { e.target.currentTime = 3; e.target.play(); }}
-            onMouseLeave={e => { e.target.pause(); e.target.currentTime = 3; }}
+            preload="auto"
             style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}
           />
         ) : thumbUrl ? (
@@ -468,10 +485,10 @@ function TenSecondPreviewVideo({ src }) {
         ref={ref}
         src={src}
         autoPlay
-        muted
         playsInline
+        controls
         preload="auto"
-        onLoadedMetadata={e => { e.currentTarget.currentTime = 0; }}
+        onLoadedMetadata={e => { e.currentTarget.currentTime = 0; e.currentTarget.play().catch(()=>{}); }}
         onTimeUpdate={stopAtPreviewLimit}
         onSeeking={stopAtPreviewLimit}
         style={{
@@ -900,15 +917,17 @@ function App() {
 
   useEffect(() => {
     let cancelled = false;
-    if (!DRIVE_FEED_URL) return;
 
-    fetchDriveFeed().then(files => {
-      if (cancelled || !files) {
-        if (!cancelled) setSyncMessage("Using cached video list.");
-        return;
-      }
-      setVideos(mapDriveFilesToVideos(files));
-      setSyncMessage(`Live synced ${files.length} videos from Drive.`);
+    Promise.all([
+      fetchManifest(),
+      DRIVE_FEED_URL ? fetchDriveFeed() : Promise.resolve(null),
+    ]).then(([previewMap, driveFiles]) => {
+      if (cancelled) return;
+      const base = driveFiles ? mapDriveFilesToVideos(driveFiles) : STATIC_CLOUD_VIDEOS;
+      setVideos(enrichVideos(base, previewMap));
+      setSyncMessage(driveFiles
+        ? `${driveFiles.length} videos · 10-second previews loaded`
+        : "10-second previews loaded");
     });
 
     return () => { cancelled = true; };
